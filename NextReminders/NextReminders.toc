@@ -1,0 +1,22 @@
+## Interface: 120007, 120100
+## Title: NextReminders
+## Notes: Lorrgs personal reminders and public encounter timeline phase detection.
+## Author: Leslie
+## Version: 0.3.5-dev
+## SavedVariables: NextRemindersDB
+
+Core.lua
+SpellCatalog.lua
+Theme.lua
+BossData.lua
+DungeonData.lua
+Import.lua
+EventPlans.lua
+BossEvents.lua
+Ready.lua
+Engine.lua
+Preview.lua
+Display.lua
+PreviewUI.lua
+UI.lua
+Main.lua

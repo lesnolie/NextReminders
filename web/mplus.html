@@ -1,0 +1,68 @@
+<!doctype html>
+<!-- One requested UI design: role/spec icons, dungeon tabs, portrait boss list. Prototype only. -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NextReminders · 大秘境首领方案</title>
+  <link rel="icon" href="assets/nextreminders-logo-v2.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="./"><img class="brand-icon" src="assets/nextreminders-logo-v2.png" alt="">NextReminders</a><nav class="site-nav" aria-label="主导航"><a href="./">首页</a><a href="mplus.html" aria-current="page">大秘境方案</a></nav><button id="save" class="save-button">保存草稿</button></header>
+
+  <main class="planner-main">
+    <section class="spec-section" aria-label="选择专精">
+      <div class="spec-top">
+        <div class="selected-spec"><img id="selectedIcon" alt=""><div><span class="eyebrow">你的专精</span><h1 id="selectedName"></h1><p id="selectedEnglish"></p></div></div>
+        <div class="flow"><span><b>01</b> 选择专精与副本</span><i>→</i><span><b>02</b> 设置首领提醒</span><i>→</i><span><b>03</b> 生成并复制</span></div>
+      </div>
+      <div class="selector-line"><span class="selector-label">职责</span><div id="roles" class="role-tabs" aria-label="职责分类"></div></div>
+      <div class="selector-line"><span class="selector-label">专精</span><div id="specIcons" class="spec-icons" aria-label="专精图标"></div><span id="specCount" class="muted spec-count"></span></div>
+      <p id="spellCatalogStatus" class="catalog-status"></p>
+    </section>
+
+    <nav id="dungeons" class="dungeon-tabs" aria-label="副本选择"></nav>
+
+    <section class="dungeon-title">
+      <div class="dungeon-identity"><img id="dungeonImage" alt=""><div><h2 id="dungeonName"></h2><p id="dungeonSubtitle"></p></div></div>
+      <span class="scope-note">按首领配置，一次导入整个副本</span>
+    </section>
+
+    <div class="workspace">
+      <aside class="boss-sidebar">
+        <div class="sidebar-heading"><span class="eyebrow">首领</span><span id="bossTotal" class="muted"></span></div>
+        <nav id="bosses" aria-label="首领选择"></nav>
+        <div class="sidebar-foot"><span class="small-dot"></span>只配置需要特别提醒的首领</div>
+      </aside>
+
+      <section class="boss-editor" aria-label="提醒配置">
+        <div class="boss-heading"><img id="bossImage" alt=""><div><span class="eyebrow" id="bossNumber"></span><h2 id="bossName"></h2></div><span class="outline-tag">个人安排</span></div>
+        <div class="mechanism-bar"><div><span class="mechanism-dot"></span><span>可选事件</span><div id="mechanismChips"></div></div><button id="mechanismToggle" class="text-button" aria-expanded="false">如何计时 <span>⌄</span></button></div>
+        <p id="mechanismHelp" class="mechanism-help" hidden></p>
+        <div class="rules-heading"><h3>提醒安排 <span id="rowCount"></span></h3><div><span id="draftState" class="sample-tag">尚未生成</span><button id="add" class="secondary-button"><span>＋</span> 添加提醒</button></div></div>
+        <div id="rows"></div>
+        <div id="empty" class="empty-state" hidden><span>＋</span><h3>这只首领，按你的打法安排</h3><p>选择技能和触发事件，设置在事件后多久提醒。</p><button id="emptyAdd" class="secondary-button">添加第一条提醒</button></div>
+        <div class="editor-bottom"><span id="editorNote">切换首领会保留其他首领的配置。</span></div>
+      </section>
+
+      <aside class="export-sidebar">
+        <section class="export-panel">
+          <span class="eyebrow">复制到游戏</span><h2>生成副本方案</h2>
+          <div class="export-context"><img id="exportSpecIcon" alt=""><span id="exportSpecName"></span><span>／</span><strong id="exportDungeonName"></strong></div>
+          <div class="export-stats"><div><strong id="configuredCount">0</strong><span>已配置首领</span></div><div><strong id="totalRows">0</strong><span>提醒条数</span></div></div>
+          <p class="export-description">包含这个副本已配置的全部首领。</p>
+          <button id="generate" class="primary-button"><span>生成字符串</span><span>→</span></button>
+          <div class="output-box"><div id="outputEmpty"><span>〈 / 〉</span><p>生成后，在这里复制</p></div><textarea id="output" readonly aria-label="生成的方案字符串" hidden></textarea></div>
+          <button id="copy" class="copy-button" disabled>▣　复制字符串</button>
+          <p id="status" class="status" role="status" aria-live="polite">设置完成后点击生成</p>
+          <div class="import-steps"><h3>在游戏里使用</h3><p><span>1</span>复制上面的字符串</p><p><span>2</span>输入 <code>/nr</code> 打开插件</p><p><span>3</span>粘贴，然后保存并启用</p></div>
+        </section>
+      </aside>
+    </div>
+
+  </main>
+  <footer class="site-footer"><div class="footer-brand"><a class="brand" href="./"><img class="brand-icon" src="assets/nextreminders-logo-v2.png" alt="">NextReminders</a><p>你的下一步，提前安排。</p><small>当前为本地开发版。</small></div><div class="footer-column"><h2>本站工具</h2><a href="mplus.html">大秘境首领方案</a><a href="./#how-it-works">使用方法</a></div><div class="footer-column external-tools"><h2>参考记录</h2><a href="https://lorrgs.io/" target="_blank" rel="noopener noreferrer"><strong>Lorrgs ↗</strong><span>团本：复制 MRT／NSRT，粘贴进插件。</span></a><a href="https://coolplan.team/" target="_blank" rel="noopener noreferrer"><strong>CoolPlan ↗</strong><span>大秘境：参考技能安排，再自行配置。</span></a></div><div class="footer-bottom"><span>Built for your next encounter.</span><span>玩家工具 · NextReminders</span></div></footer>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>

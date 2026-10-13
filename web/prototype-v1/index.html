@@ -1,0 +1,71 @@
+<!doctype html>
+<!-- One requested UI design: role/spec icons, dungeon tabs, portrait boss list. Prototype only. -->
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>NextReminders · 网页设计 v1.2</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230ea5e9'/%3E%3Cpath d='M9 24V8h4l6 10V8h4v16h-4L13 14v10z' fill='%23131720'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="design.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="./"><span class="brand-mark">N<span></span></span>NextReminders</a>
+    <span class="header-divider"></span><span class="header-title">大秘境首领方案</span>
+    <div class="header-right"><a href="https://lorrgs.io/" target="_blank" rel="noopener noreferrer">团本去 Lorrgs <span>↗</span></a><span class="preview-tag">设计预览 · V1.2</span></div>
+  </header>
+
+  <main>
+    <section class="spec-section" aria-label="选择专精">
+      <div class="spec-top">
+        <div class="selected-spec"><img id="selectedIcon" alt=""><div><span class="eyebrow">你的专精</span><h1 id="selectedName"></h1><p id="selectedEnglish"></p></div></div>
+        <div class="flow"><span><b>01</b> 选择专精与副本</span><i>→</i><span><b>02</b> 设置首领提醒</span><i>→</i><span><b>03</b> 生成并复制</span></div>
+      </div>
+      <div class="selector-line"><span class="selector-label">职责</span><div id="roles" class="role-tabs" aria-label="职责分类"></div></div>
+      <div class="selector-line"><span class="selector-label">专精</span><div id="specIcons" class="spec-icons" aria-label="专精图标"></div><span id="specCount" class="muted spec-count"></span></div>
+    </section>
+
+    <nav id="dungeons" class="dungeon-tabs" aria-label="副本选择"></nav>
+
+    <section class="dungeon-title">
+      <div class="dungeon-identity"><img id="dungeonImage" alt=""><div><h2 id="dungeonName"></h2><p id="dungeonSubtitle"></p></div></div>
+      <span class="scope-note">按首领配置，一次导入整个副本</span>
+    </section>
+
+    <div class="workspace">
+      <aside class="boss-sidebar">
+        <div class="sidebar-heading"><span class="eyebrow">首领</span><span id="bossTotal" class="muted"></span></div>
+        <nav id="bosses" aria-label="首领选择"></nav>
+        <div class="sidebar-foot"><span class="small-dot"></span>只配置需要特别提醒的首领</div>
+      </aside>
+
+      <section class="boss-editor" aria-label="提醒配置">
+        <div class="boss-heading"><img id="bossImage" alt=""><div><span class="eyebrow" id="bossNumber"></span><h2 id="bossName"></h2></div><span class="outline-tag">个人安排</span></div>
+        <div class="mechanism-bar"><div><span class="mechanism-dot"></span><span>可选事件</span><div id="mechanismChips"></div></div><button id="mechanismToggle" class="text-button" aria-expanded="false">如何计时 <span>⌄</span></button></div>
+        <p id="mechanismHelp" class="mechanism-help" hidden></p>
+        <div class="rules-heading"><h3>提醒安排 <span id="rowCount"></span></h3><div><span id="sampleBadge" class="sample-tag">填写示例</span><button id="add" class="secondary-button"><span>＋</span> 添加提醒</button></div></div>
+        <div id="rows"></div>
+        <div id="empty" class="empty-state" hidden><span>＋</span><h3>这只首领，按你的打法安排</h3><p>选择技能和触发事件，设置在事件后多久提醒。</p><button id="emptyAdd" class="secondary-button">添加第一条提醒</button></div>
+        <div class="editor-bottom"><span id="editorNote">当前为填写示例，用来查看布局。</span><button id="example" class="text-button">恢复填写示例</button></div>
+      </section>
+
+      <aside class="export-sidebar">
+        <section class="export-panel">
+          <span class="eyebrow">复制到游戏</span><h2>生成副本方案</h2>
+          <div class="export-context"><img id="exportSpecIcon" alt=""><span id="exportSpecName"></span><span>／</span><strong id="exportDungeonName"></strong></div>
+          <div class="export-stats"><div><strong id="configuredCount">1</strong><span>已配置首领</span></div><div><strong id="totalRows">3</strong><span>提醒条数</span></div></div>
+          <p class="export-description">包含这个副本已配置的全部首领。</p>
+          <button id="generate" class="primary-button"><span>生成字符串</span><span>→</span></button>
+          <div class="output-box"><div id="outputEmpty"><span>〈 / 〉</span><p>生成后，在这里复制</p></div><textarea id="output" readonly aria-label="生成的方案字符串" hidden></textarea></div>
+          <button id="copy" class="copy-button" disabled>▣　复制字符串</button>
+          <p id="status" class="status" role="status" aria-live="polite">设置完成后点击生成</p>
+          <div class="import-steps"><h3>在游戏里使用</h3><p><span>1</span>复制上面的字符串</p><p><span>2</span>输入 <code>/nr</code> 打开插件</p><p><span>3</span>粘贴，然后保存并启用</p></div>
+        </section>
+      </aside>
+    </div>
+    <footer><span>NextReminders <i>·</i> 你的安排，在对的时机提醒。</span><span>网页负责生成，插件负责提醒。</span></footer>
+  </main>
+  <div class="prototype-banner"><span class="small-dot"></span><strong>设计预览 V1.2</strong><span>填写示例 · 草稿仅在此页临时保留</span><a href="../">返回当前网页 ↗</a></div>
+  <script type="module" src="design.mjs"></script>
+</body>
+</html>
