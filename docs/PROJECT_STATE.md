@@ -1,12 +1,14 @@
 # NextReminders 当前状态
 
+0.3.6：大秘境没配置的首领自动使用内置爆发提醒（开打＋每次冷却好了），设置可关；配置过的首领仍按用户方案。团本 Lorrgs 动态阶段可实战使用。接受小数阶段（1.5／1.75／2.5）；来源阶段可绑定 BigWigs 阶段（公开 BigWigs_SetStage 消息，所有难度）或填写开打后转阶段秒数，BigWigs 缺席时自动改用填写时间。WCL 复核后，NR.BossData.stages 覆盖 3470／3445／3429／3497／3492／3513；其中乌拉特克已确认 P1→P2→P2.5→P3，Kith'ix 已确认 P1→P2。WCL 有 7 只团本的 phaseTransitions 直接证据；大秘境 28 只没有该字段，阶段结论来自阶段专属施法、客户端事件和血量规则的交叉核对。游戏内 stage 消息仍待 LIVE，source_review=PENDING。见 research/BIGWIGS_STAGES、research/WCL_PHASE_AUDIT、NR-ERR-027。
+
 0.3.5：按用户游戏截图修复导入区可见插入光标。增加2单位宽冷蓝闪烁纹理，空框聚焦立即显示，非空跟随原生公开布局坐标和滚动；失焦／Esc／切页／隐藏撤掉并停止更新。原0.3.3只证明焦点与滚动，不能视为可见光标的LIVE通过。49项STATIC/MOCK，备份并同步游戏安装见.local/import-caret-20261013；LIVE未测，source_review=PENDING。适用NR-ERR-003/011/020/026。
 
 0.3.4：内置40专精的122个去重常用主动爆发技能，以12.1.0.69933游戏动作库为归属基线并核对中文元数据。单一JSON源生成JS与Lua，网页点图标选技能，保留手填编号；插件EventPlans／Display／PreviewUI共享公开客户端优先的显示，/nr spells只读列当前专精。48项STATIC/MOCK通过，WEB技能选择／图标／换技能清旧导出通过。新包与游戏安装同步记录见.local/burst-catalog-20261013；LIVE未测，source_review=PENDING。源与更新步骤见research/BURST_CATALOG。适用NR-ERR-003/014/017/018/022/023/024/025。
 
 2026-10-13 网站home-20261013：用户认可冷蓝UI后接入新首页 `/` 与实际生成器 `/mplus.html`，图标按用户TMN参考独立生成圆角蓝青N；后续提醒改成醒目整行开关并解释实际使用／每轮就绪／显示与语音，Lorrgs和CoolPlan只放页脚。保留旧草稿键及迁移，所有新草稿为空白。45项STATIC/MOCK通过，WEB开关导出、修改失效、次数限制、双首领及桌面／390宽检查通过。详见WEB_HOME；游戏源码和已安装插件没有改动，旧dist保持此前快照；本轮source_review=PENDING。适用NR-ERR-017/018/021/022。
 
-当前源码：0.3.5-dev，2026-10-13。执行者自检完成，待 Advisor 验收；source_review=PENDING。独立项目，未修改 TellMeNext、未提交或发布。0.3.2已备份并同步Display.lua及版本字段到用户现有游戏插件目录，须/reload；不修改SavedVariables。构建结果以dist/manifest.json中的对应版本为准。
+当前源码：0.3.6-dev，2026-10-21。执行者自检完成，待 Advisor 验收；source_review=PENDING。独立项目，未修改 TellMeNext、未提交或发布。0.3.2已备份并同步Display.lua及版本字段到用户现有游戏插件目录，须/reload；不修改SavedVariables。构建结果以dist/manifest.json中的对应版本为准。
 
 0.3.3：用户先说编号后更正为输入光标；仅修复导入编辑区的点击焦点／可见反馈，没有自动填编号。编辑框／面板／滚动空白处左键可聚焦，亮蓝边框＋正在输入提示，空文本有Ctrl+V提示；OnCursorChanged将插入位置滚动到可见范围，长行撑高内容；Esc／切页／隐藏释放焦点。44项STATIC/MOCK通过，含真实UI点击→聚焦／失焦→长文本光标滚动→解析与草稿保持回归。游戏UI.lua和版本字段先备份后同步，须/reload；新版原生光标像素与滚动LIVE未测，source_review=PENDING。网站服务重开56717，保留原页面和用户草稿。适用NR-ERR-003/009/011/020。
 
@@ -30,8 +32,8 @@
 - Lorrgs MRT 静态/动态、NSRT 粘贴解析、完整播放预览、显式阶段绑定和保存；支持来源与使用难度分离。
 - 个人或按自己身份筛选的提醒；成功施法后撤当前提醒；未来提醒保留。
 - 游戏原生文字转语音、3 秒倒数、可选音效、指定暴雪原生团框覆盖层发光。
-- 5 只大秘境首领公开事件阶段识别；密谋老四和乌拉特克使用开战相对个人方案，显示固定预报参考。
-- 首领数据由本项目 BossData.lua 独立维护，dataVersion 为 2026.10.12.2；开发流程见 DEVELOPMENT。
+- 大秘境阶段审计覆盖 28 只：8 只有可解释阶段模型，其余按普通事件处理；团本审计覆盖 10 只，7 只由 WCL phaseTransitions 直接确认。乌拉特克已有阶段绑定，旧全 P1 NSRT 仍需显式转换或重新导入。
+- 首领数据由本项目 BossData.lua 独立维护，dataVersion 为 2026.10.23.2；开发流程见 DEVELOPMENT。
 - 真实测试后才构建安装包和源码工具包，并绑定文件哈希。
 
 ## 验证边界

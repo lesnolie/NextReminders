@@ -1,5 +1,14 @@
 # NextReminders 错误记录
 
+## NR-ERR-027：Lorrgs 动态导出的小数阶段整份被拒绝
+
+- 状态：FIXED，0.3.6，STATIC/MOCK；BigWigs 阶段秒级偏差与 LIVE 待测。
+- 现象／根因：Lorrgs 对动态首领导出 `ph:1.5`、`ph:1.75`、`ph:2.5`（MRT 为 `,p1.5`）。ParseNote 与 ValidatePlan 要求阶段为整数，MRT 正则只收 `p(%d+)`，导致奈克扎利、盘绕祭坛的 NSRT／MRT 整份导入失败；UI 摘要用 `%d` 也无法显示小数阶段。另外动态阶段只能绑定史诗本地计时节点，团本没有节点，导致 Lorrgs 阶段相对时间实际无法实战使用。
+- 修复：新增 NR.Phase（1～100，最多两位小数）用于解析与校验，MRT 接受小数阶段，摘要用 %g。新增 BigWigs 阶段绑定 `stage`、按时间 `time` 与 `phaseFallback`，详见 ARCHITECTURE 与 research/BIGWIGS_STAGES。
+- 适用：团本 Lorrgs NSRT／MRT 导入、阶段绑定、引擎锚点。
+- 避免：解析外部格式前先读来源实现确认取值范围，不能凭样例假设阶段为整数；阶段对应关系属于自维护数据，需 LIVE 核对。
+- 验证：3470 四阶段 NSRT、3429 MRT p2.5、1.333 反例、英雄 stage 绑定、BigWigs 有／无／错首领消息、顺序映射 3497、UI 填时间自动切换并保存。51 项 STATIC/MOCK 通过；LIVE 未测，source_review=PENDING。
+
 ## NR-ERR-026：输入已聚焦，但导入区仍看不到插入光标
 
 - 状态：修法已实现，0.3.5，STATIC/MOCK通过；真实游戏光标像素LIVE待复核。

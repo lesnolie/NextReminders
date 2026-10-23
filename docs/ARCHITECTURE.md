@@ -6,7 +6,7 @@
 
 2026-10-13网站：index.html为独立工具首页，mplus.html为实际首领生成器。app.mjs加载planner.mjs；drafts.mjs独立拥有旧整包草稿读取、旧单首领迁移、验证后保存和最近选择，沿用原storage键。首领事件／生成协议仍由plan.mjs拥有，after:ready显示为完整解释的开关；所有实际输入变化清空生成快照，保存或生成失败不默默覆盖旧数据。主页和生成器共享品牌图片与石墨／冷蓝样式，外部参考入口只在页脚。新增PNG/JPG等媒体纳入build.py源快照；游戏安装ZIP不加入网站媒体。45项统一STATIC/MOCK与WEB证据见WEB_HOME。
 
-版本：0.3.5-dev；独立插件，不调用 TellMeNext、EXBoss、TimelineReminders 或 Lorrgs 网络 API。当前数据由本项目维护，无原包获取/构建依赖。网站仅大秘境规则生成，团本去Lorrgs复制；WCL命令行工具作为开发参考保留，游戏插件不联网。
+版本：0.3.6-dev；独立插件，不调用 TellMeNext、EXBoss、TimelineReminders 或 Lorrgs 网络 API。BigWigs 为可选阶段来源，仅订阅其公开消息。当前数据由本项目维护，无原包获取/构建依赖。网站负责大秘境规则生成，并提供单首领 NSRT 阶段兼容预览；团本继续从 Lorrgs 导出，WCL 命令行与公开报告只用于开发期阶段审计，游戏插件不联网。
 
 0.3.3 UI导入编辑框显式EnableMouse，并在编辑框／面板／滚动框左键按下时SetFocus；OnEditFocusGained/Lost更新外框与输入状态提示，空文本未聚焦时显示Ctrl+V说明。OnCursorChanged使用编辑框给出的y和cursorHeight维持可见范围，内容只在需要时撑高，避免重复改尺寸；不将原生光标模拟成额外纹理。OnTextChanged继续维护文本高度并刷新空提示。Esc、SetPage与导入页OnHide清理焦点；不自动聚焦、不改文本或编号、不自动解析／保存。44项STATIC/MOCK通过；原生光标像素需LIVE核对。
 
@@ -30,11 +30,11 @@ NRPlan:1协议见WEB_PLAN_FORMAT.md；UI按头部识别，解析/校验后才允
 
 `NR.ParseNote(text, options)` 返回方案或 `nil, error`；`options` 可包含 `encounterID`、`difficulty`（MRT 缺省难度）、`targetDifficulty`（明确选择使用难度）、`personal`。只解析文本，不执行它。文本上限 200 KB、去重后 1～500 条，每行一个技能。
 
-方案字段：`encounterID` 正整数；`difficulty` 为 normal/heroic/mythic；`rows` 为提醒数组；`phaseBindings` 将来源阶段映射到 `pull` 或本地节点编号；`personal` 控制忽略标签/匹配自己；`enabled` 控制加载。
+方案字段：`encounterID` 正整数；`difficulty` 为 normal/heroic/mythic；`rows` 为提醒数组；`phaseBindings` 将来源阶段映射到 `pull`、`stage`（BigWigs 阶段）、`time`（按 `phaseFallback` 秒数）或本地节点编号；`phaseFallback` 可选，来源阶段→开打后秒数（0～3600）；`personal` 控制忽略标签/匹配自己；`enabled` 控制加载。
 
 NSRT 另保存 `sourceDifficulty`，作为来源元数据；MRT 不包含该信息，保持缺失。`difficulty` 是实际使用难度，存档键、战斗选择、节点校验及固定预报均按它执行。默认 NSRT 跟随头部、MRT 使用史诗；用户可明确覆盖使用难度。跨难度复用保留原施法秒数，不调用任何时间换算；英雄不复用现有史诗动态识别规则。旧方案无需迁移。
 
-提醒字段：唯一整数 `id`、整数 `spellID`、整数来源 `phase`、相对秒数 `time`、字符串 `tag`。时间只支持 0～3600 秒。来源 P1 必须绑定 pull；来源 P2+ 必须由用户明确选择。动态节点只支持当前数据中存在的史诗/大秘境节点。
+提醒字段：唯一整数 `id`、整数 `spellID`、来源 `phase`（1～100，最多两位小数，对应 Lorrgs 的 1.5／1.75／2.5）、相对秒数 `time`、字符串 `tag`。时间只支持 0～3600 秒。来源 P1 必须绑定 pull；来源 P2+ 必须由用户明确选择。本地计时节点只支持当前数据中存在的史诗/大秘境节点；`stage` 只允许 `NR.BossData.stages` 有对应的阶段，适用所有难度；`time` 必须有该阶段的 `phaseFallback`。导入时有对应的来源阶段默认 `stage`，其余 P2+ 未绑定。
 
 `NR.ValidateBindings(plan)` 在保存和开战时都执行。未知节点拒绝整份方案，不能默默把阶段改成开战时间。团本未知动态阶段改用 MRT 静态导出。重复来源阶段号无法恢复每次阶段发生顺序。
 
@@ -45,6 +45,10 @@ NSRT 另保存 `sourceDifficulty`，作为来源元数据；MRT 不包含该信�
 `NR.Engine.New(emit)` 返回独立实例；`Begin(encounterID,difficulty,plan,settings,now,identity)`、`Tick(now)`、`Cast(spellID,now)`、`Stop()` 管理生命周期。复制方案到本场，不回写用户存档。
 
 `Timeline(kind, info, now)` 仅接收公开 `id/source/duration`。added 为新增，canceled 为取消，removed 清理实例；snapshot 只记录开战前已有计时的来源，不加入阶段判断批次。脚本来源和秘密值不参与识别。新增/取消批次长度 0.3 秒，每只首领有独立阶段间隔守卫。
+
+大秘境（难度 8）开战时若没有该首领的事件方案、也没有静态方案，且设置 `autoBurst`（默认 true），Main 使用 `NR.EventPlans.Default(specID,encounterID)`：取 SpellCatalog 中本专精 primarySpecs、且 `C_SpellBook.IsSpellKnown`／`IsPlayerSpell` 为真的技能（接口不可用时只取非天赋），每个一行 `start`＋`after="ready"`＋`auto=true`。不保存、每场重建。`auto` 行在开战提醒过期后第一次施法也开始就绪监听。
+
+`Stage(stage,now)` 接收当前首领的 BigWigs_SetStage（Main 以 `BigWigsLoader.RegisterMessage` 订阅公开消息，按 `module:GetEncounterID()` 过滤，不读取 BigWigs 其他内部数据）。重复阶段值不算切换；`NR.Stages.PhaseFor` 按 value／order 映射到来源阶段，首次映射设锚点 `stage:P`，并退休更早来源阶段尚未显示的提醒。`StageReady` 由 BigWigs engage 或任一阶段消息标记；开打 5 秒仍未就绪时，`stage` 行改用 `phaseFallback`，没有备用时间的行不提醒并提示一次。预览不使用 BigWigs，`stage` 阶段按手动阶段演练，`time` 按开打相对。
 
 `Transition(now,logicalPhase)` 顺序增加本地节点，设置该节点起点。阶段提醒以此为时间零点；进入下一节点后旧节点提醒退休，开战相对提醒保持原时钟。
 

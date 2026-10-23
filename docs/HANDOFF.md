@@ -4,6 +4,8 @@
 
 ## 恢复后的最新状态（优先于下文旧快照）
 
+- 0.3.6-dev（2026-10-23）：团本以 Lorrgs NSRT 为准，阶段识别复用 BigWigs 公开消息，手填转阶段时间兜底。WCL 已复核 28 只大秘境与 10 只团本：7 只团本有 phaseTransitions 直接证据；乌拉特克确认 P1→P2→P2.5→P3，Kith'ix 确认 P1→P2，均已补入 stages。下一步只需游戏内实测 stage 消息，重点是 3470／3429／3492／3513；详见 research/BIGWIGS_STAGES、WCL_PHASE_AUDIT。
+
 - 0.1.3-dev 最新：用户要求参考原插件逆向改善UI；只读既有明文LiquidUI/Interface代码，无新原包获取。独立Theme.lua重建，导入/设置分页，双栏检查、滚动阶段绑定、播放轨道/游标/分列状态/技能图标，预览提醒临时TOP并恢复CENTER。21项STATIC/MOCK PASS，三个浏览器视觉样稿截图及docs/ui-preview.html可直接查看，非游戏截图，LIVE未测、source_review=PENDING。最新包0.1.3，旧版包/日志manifest备份保留。临时交互预览地址http://127.0.0.1:50620/ui-preview.html（本地Python会话3299，关闭后可重新用http.server启动docs目录）；长期文件仍为docs/ui-preview.html。
 - 0.1.2-dev 最新决定：用户不再获取 TimelineReminders，继续独立开发。当前已删除 tools/update_data.py、data-source.json 和原包测试依赖；BossData 改用独立 dataVersion=2026.10.12.1，历史基线/旧 ZIP 保留。新增 Preview.lua/PreviewUI.lua，整份导出方案可脱战播放、暂停、1/2/4 倍速、跳转、手动阶段及模拟施法；未知团本阶段也可演练，仍不允许当成实战支持。独立引擎不改存档/实战日志，战斗时退出。最新统一入口20项PASS；安装和源码包更新为0.1.2-dev，未游戏实测/安装/发布，待Advisor验收。后续以PROJECT_STATE/ARCHITECTURE/DEVELOPMENT/manifest为准，下文上游获取和旧版未完成事项仅历史，不再适用。
 - 最新版本为 0.1.1-dev：史诗 Lorrgs 文本可明确选择用于英雄。NSRT 来源难度保留，目标难度单独选择，秒数不换算；英雄仍不启用史诗动态识别规则。新增解析/UI/实际战斗生命周期测试后统一入口 19 项 PASS；最新两个包文件名为 0.1.1-dev。0.1.0 两个 ZIP 与对应旧 manifest/checks 备份保留。
@@ -87,7 +89,7 @@ ZIP SHA256：`2e3c5c80a0c7e83ecd171acf79dd2a1c99828ebdff8e483305317e1d1b31814a`�
 | 塞塔里斯神庙老二 Merektha | 2125 | 0.3 秒内新增至少 5 个事件进入下一轮；5 秒防重复。没有直接判断事件 702。 |
 | 塞塔里斯神庙老四 Avatar | 2127 | 新增时长约 15 或 32.5 秒的事件切换阶段；2 秒防重复。既有固定预报，也有公开事件阶段识别。 |
 | 纳洛拉克洞穴老二 Sentinel | 3208 | 25、50、13、7 秒时长事件组合进入下一轮；5 秒防重复。小怪时间不能单独证明应留爆发。 |
-| 团本 8 号乌拉特克 Ulatek | 3492 | 固定时间，无动态阶段识别；心脏相关 Rage of the Shackled 施法 6.5 秒，随后易伤 20 秒。英雄约 129、278.1、567.2 秒；史诗约 139、288、583 秒。 |
+| 团本 8 号乌拉特克 Ulatek | 3492 | 已有 P1→P2→P2.5→P3；分别绑定 BigWigs stage 1／2／2.5／3，WCL 三份击杀确认。心脏相关 Rage of the Shackled 仍是独立机制，施法 6.5 秒，随后易伤 20 秒；英雄约 129、278.1、567.2 秒，史诗约 139、288、583 秒。 |
 
 用户的 EXBoss 规则：老一易伤后 3～13 秒与老四事件 38 后 0～10 秒已游戏实测；Coil P2 未实测；Merektha 事件 702 依据较弱（21/32 记录）；Avatar 未定；Sentinel 开打交即可（20/20 高手记录）。不可将这些事件号与原插件阶段直接混同。
 
