@@ -1,0 +1,183 @@
+{
+ "source": "tellmenext-web web/raid-plan.mjs exportRaidNsrt",
+ "plans": [
+  {
+   "encounterID": 3470,
+   "difficulty": "heroic",
+   "phases": [
+    1,
+    1.5,
+    2
+   ],
+   "text": "EncounterID:3470;Difficulty:Heroic;Name:Nek'zali the Soulcoiler;\nph:1;time:5.0;tag:251;spellid:51271;\nph:1.5;time:6.0;tag:251;spellid:51271;\nph:2;time:7.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3470,
+   "difficulty": "mythic",
+   "phases": [
+    1,
+    1.5,
+    2
+   ],
+   "text": "EncounterID:3470;Difficulty:Mythic;Name:Nek'zali the Soulcoiler;\nph:1;time:5.0;tag:251;spellid:51271;\nph:1.5;time:6.0;tag:251;spellid:51271;\nph:2;time:7.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3445,
+   "difficulty": "heroic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3445;Difficulty:Heroic;Name:Entombed Sentinels;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3445,
+   "difficulty": "mythic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3445;Difficulty:Mythic;Name:Entombed Sentinels;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3455,
+   "difficulty": "heroic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3455;Difficulty:Heroic;Name:Vashnik the Malignant;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3455,
+   "difficulty": "mythic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3455;Difficulty:Mythic;Name:Vashnik the Malignant;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3497,
+   "difficulty": "heroic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3497;Difficulty:Heroic;Name:The Lost Explorers;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3497,
+   "difficulty": "mythic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3497;Difficulty:Mythic;Name:The Lost Explorers;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3420,
+   "difficulty": "heroic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3420;Difficulty:Heroic;Name:Sszorak;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3420,
+   "difficulty": "mythic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3420;Difficulty:Mythic;Name:Sszorak;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3421,
+   "difficulty": "heroic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3421;Difficulty:Heroic;Name:The Twin Fangs;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3421,
+   "difficulty": "mythic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3421;Difficulty:Mythic;Name:The Twin Fangs;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3429,
+   "difficulty": "heroic",
+   "phases": [
+    1,
+    2,
+    2.5,
+    3
+   ],
+   "text": "EncounterID:3429;Difficulty:Heroic;Name:The Coiled Altar;\nph:1;time:5.0;tag:251;spellid:51271;\nph:2;time:6.0;tag:251;spellid:51271;\nph:2.5;time:7.0;tag:251;spellid:51271;\nph:3;time:8.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3429,
+   "difficulty": "mythic",
+   "phases": [
+    1,
+    2,
+    2.5,
+    3
+   ],
+   "text": "EncounterID:3429;Difficulty:Mythic;Name:The Coiled Altar;\nph:1;time:5.0;tag:251;spellid:51271;\nph:2;time:6.0;tag:251;spellid:51271;\nph:2.5;time:7.0;tag:251;spellid:51271;\nph:3;time:8.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3492,
+   "difficulty": "heroic",
+   "phases": [
+    1,
+    2,
+    2.5,
+    3
+   ],
+   "text": "EncounterID:3492;Difficulty:Heroic;Name:Ula'tek;\nph:1;time:5.0;tag:251;spellid:51271;\nph:2;time:6.0;tag:251;spellid:51271;\nph:2.5;time:7.0;tag:251;spellid:51271;\nph:3;time:8.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3492,
+   "difficulty": "mythic",
+   "phases": [
+    1,
+    2,
+    2.5,
+    3
+   ],
+   "text": "EncounterID:3492;Difficulty:Mythic;Name:Ula'tek;\nph:1;time:5.0;tag:251;spellid:51271;\nph:2;time:6.0;tag:251;spellid:51271;\nph:2.5;time:7.0;tag:251;spellid:51271;\nph:3;time:8.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3379,
+   "difficulty": "heroic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3379;Difficulty:Heroic;Name:Nymrissa Wavecaller;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3379,
+   "difficulty": "mythic",
+   "phases": [
+    1
+   ],
+   "text": "EncounterID:3379;Difficulty:Mythic;Name:Nymrissa Wavecaller;\nph:1;time:5.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3513,
+   "difficulty": "heroic",
+   "phases": [
+    1,
+    2
+   ],
+   "text": "EncounterID:3513;Difficulty:Heroic;Name:Kith'ix;\nph:1;time:5.0;tag:251;spellid:51271;\nph:2;time:6.0;tag:251;spellid:51271;\n"
+  },
+  {
+   "encounterID": 3513,
+   "difficulty": "mythic",
+   "phases": [
+    1,
+    2
+   ],
+   "text": "EncounterID:3513;Difficulty:Mythic;Name:Kith'ix;\nph:1;time:5.0;tag:251;spellid:51271;\nph:2;time:6.0;tag:251;spellid:51271;\n"
+  }
+ ]
+}

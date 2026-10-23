@@ -1353,6 +1353,40 @@ g:Stage(1,0); g:Stage(3,30); g:Stage(1,60)
 assert(g.rows[1].target==31 and g.rows[2].target==61)
 """)
 
+    def test_every_website_raid_export_is_detected_by_bigwigs_stages(self):
+        # tests/fixtures/site-raid-exports.json: one plan per raid boss and difficulty exported by the website's own
+        # exportRaidNsrt (tellmenext-web web/raid-plan.mjs), one spell per phase it offers, 5+i s into phase i.
+        # Every phase the website offers must bind to BigWigs without typed times, and fire on the SetStage
+        # sequence the installed BigWigs modules send (v427.6: Nekzali 1.5/2, CoiledAltar and Ulatek 2/2.5/3,
+        # Kithix 2). Bosses without phases on the website are pull-relative.
+        plans=json.loads((ROOT/"tests/fixtures/site-raid-exports.json").read_text(encoding="utf-8"))["plans"]
+        bigwigs={3470:[1.5,2],3429:[2,2.5,3],3492:[2,2.5,3],3513:[2]}
+        lua,nr=runtime(); lua.globals().NR=nr
+        check=lua.eval(r"""function(text,difficulty,encounterID,stages,phases)
+local p,e=NR.ParseNote(text); assert(p,e)
+for i=1,#phases do local ph=phases[i]
+  assert(p.phaseBindings[ph]==(ph==1 and "pull" or "stage"), encounterID.." P"..ph.." binding "..tostring(p.phaseBindings[ph]))
+end
+assert(NR.ValidateBindings(p), encounterID.." needs typed phase times")
+p.enabled=true
+local eng=NR.Engine.New(function() end); eng:Begin(encounterID,difficulty,p,{lead=5,window=10},0,{specID=251})
+eng:Stage(1,0); eng:Tick(1)
+local at={[1]=0}
+for i=1,#stages do local t=100*i; eng:Stage(stages[i],t); at[stages[i]]=t end
+assert(#eng.rows==#phases, encounterID.." rows "..#eng.rows)
+for i=1,#phases do local ph=phases[i]; local want=at[ph]+5+(i-1)
+  local found=false
+  for _,row in ipairs(eng.rows) do if row.phase==ph and row.target==want then found=true end end
+  assert(found, encounterID.." "..difficulty.." P"..ph.." expected at "..want)
+end
+return true end""")
+        self.assertEqual(len(plans),20)
+        for plan in plans:
+            enc=plan["encounterID"]
+            self.assertEqual(plan["phases"][1:],bigwigs.get(enc,[]),enc)
+            with self.subTest(encounter=enc,difficulty=plan["difficulty"]):
+                check(plan["text"],plan["difficulty"],enc,lua.table(*bigwigs.get(enc,[])),lua.table(*plan["phases"]))
+
     def test_bigwigs_messages_drive_saved_plan_and_ui_time_box(self):
         lua,nr=runtime(True); lua.globals().NR=nr
         lua.execute(r"""
