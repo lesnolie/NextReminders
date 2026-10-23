@@ -32,7 +32,9 @@ def build():
     documentation = [ROOT/name for name in ("README.md","LICENSE","requirements-dev.txt")]
     documentation += sorted(p for p in (ROOT/"docs").glob("*.md") if p.name != "HANDOFF.md")
     documentation += sorted((ROOT/"docs").glob("ui-*.html")) + sorted((ROOT/"docs").glob("ui-*.png"))
-    inputs = files + documentation + [ROOT/"CONTEXT.md"]
+    media = sorted(p for p in (SOURCE/"Media").glob("*") if p.suffix in (".ogg",".mp3",".tga"))
+    if not (SOURCE/"Media"/"burst_meow.ogg").exists(): raise ValueError("Voice pack Media/burst_meow.ogg missing")
+    inputs = files + media + documentation + [ROOT/"CONTEXT.md"]
     inputs += sorted(p for p in (ROOT/"tools").glob("*") if p.suffix in (".py",".mjs"))
     inputs += sorted((ROOT/"tests").glob("*.py"))
     inputs += sorted(p for p in (ROOT/"web").rglob("*") if p.is_file() and p.suffix in (".html",".css",".mjs",".json",".png",".jpg",".jpeg",".webp",".svg",".ico"))
@@ -53,6 +55,7 @@ def build():
         if any(p.read_bytes() != snapshot[str(p.relative_to(ROOT)).replace("\\","/")] for p in inputs):
             raise ValueError("Source changed during checks; rebuild required")
         addon_payload = {"NextReminders/"+p.name:snapshot["NextReminders/"+p.name] for p in files}
+        addon_payload.update({"NextReminders/Media/"+p.name:snapshot["NextReminders/Media/"+p.name] for p in media})
         addon_payload.update({"NextReminders/README.md":snapshot["README.md"],"NextReminders/LICENSE":snapshot["LICENSE"]})
         names = {f"NextReminders-{version}.zip":addon_payload, f"NextReminders-source-{version}.zip":snapshot}
         staged = {}
