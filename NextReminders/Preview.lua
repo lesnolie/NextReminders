@@ -27,11 +27,13 @@ function NR.Preview.New(emit, clear, blocked)
             local binding = input.phaseBindings[phase]
             if phase == 1 or binding == "pull" then
                 plan.phaseBindings[phase] = "pull"
+            elseif binding == "time" then
+                plan.phaseBindings[phase] = "time"
             else
                 local known = type(binding) == "number" and definition and definition.anchors[binding]
                 local key = known and "node"..binding or "source"..phase
                 if not groups[key] then
-                    groups[key] = {key=key,order=known and binding or phase,label=known or "来源 P" .. phase .. "（手动演练）"}
+                    groups[key] = {key=key,order=known and binding or phase,label=known or (binding == "stage" and "BigWigs 阶段 → " or "") .. "来源 P" .. phase .. "（手动演练）"}
                     ordered[#ordered+1] = groups[key]
                 end
                 plan.phaseBindings[phase] = key
@@ -49,12 +51,15 @@ function NR.Preview.New(emit, clear, blocked)
     function p:Start(input, settings, identity, now)
         if blocked() then return nil, "请脱战并结束实际首领战后预览" end
         local eventMode=type(input)=="table" and input.kind=="events"
+        local timelineMode=type(input)=="table" and input.kind=="timeline3"
         local valid, err
-        if eventMode then valid,err=NR.EventPlans.Validate(input) else valid,err=NR.ValidatePlan(input) end
+        if timelineMode then valid,err=NR.TimelinePlans.Validate(input)
+        elseif eventMode then valid,err=NR.EventPlans.Validate(input) else valid,err=NR.ValidatePlan(input) end
         if not valid then return nil, err end
         self:Stop()
         self.eventMode=eventMode
-        if eventMode then
+        self.timelineMode=timelineMode
+        if eventMode or timelineMode then
             self.plan=NR.Copy(input); self.plan.enabled=true
             self.definition={anchors={},rules={},guard=0}
         else self.plan, self.definition = prepare(input) end
@@ -73,9 +78,10 @@ function NR.Preview.New(emit, clear, blocked)
 
     function p:BeginEngine()
         local identity=NR.Copy(self.identity)
-        if self.eventMode then identity.specID=self.plan.specID end
-        self.engine:Begin(self.plan.encounterID,self.plan.difficulty,self.eventMode and nil or self.plan,self.settings,0,identity,
-            self.eventMode and self.plan or nil)
+        if self.eventMode or self.timelineMode then identity.specID=self.plan.specID end
+        self.engine:Begin(self.plan.encounterID,self.plan.difficulty,
+            not self.eventMode and not self.timelineMode and self.plan or nil,self.settings,0,identity,
+            self.eventMode and self.plan or nil,self.timelineMode and self.plan or nil)
     end
 
     function p:ApplyEvent(action)

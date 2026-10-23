@@ -1,8 +1,8 @@
 local _, NR = ...
 _G.NextReminders = NR
-NR.version = "0.3.5-dev"
+NR.version = "0.3.6-dev"
 NR.defaults = { lead = 5, window = 10, hideOnUse = true, tts = true,
-    countdown = true, sound = false, glow = "", volume = 80, scale = 1 }
+    countdown = true, sound = false, soundChoice = "meow", glow = "", volume = 80, scale = 1, autoBurst = true }
 
 function NR.Public(value)
     return not (issecretvalue and issecretvalue(value))
@@ -11,6 +11,25 @@ end
 function NR.Number(value, minimum, maximum)
     return NR.Public(value) and type(value) == "number" and value == value
         and value >= (minimum or 0) and value <= (maximum or 3600)
+end
+
+-- Lorrgs numbers intermissions as 1.5 / 1.75 / 2.5; at most two decimals.
+function NR.Phase(value)
+    return NR.Number(value, 1, 100) and math.abs(value * 100 - math.floor(value * 100 + 0.5)) < 1e-6
+end
+
+function NR.PhaseLabel(phase)
+    return string.format("%g", phase)
+end
+
+-- "135", "135.5", "2:15" or "2:15.5" -> seconds within 0..3600.
+function NR.ParseClock(text)
+    if type(text) ~= "string" then return nil end
+    text = NR.Trim(text)
+    local minute, second = text:match("^(%d+):(%d%d%.?%d*)$")
+    local value = minute and tonumber(minute) * 60 + tonumber(second) or text:match("^%d+%.?%d*$") and tonumber(text)
+    if minute and tonumber(second) >= 60 then return nil end
+    return NR.Number(value, 0, 3600) and value or nil
 end
 
 function NR.Trim(value)
@@ -35,10 +54,11 @@ function NR.Settings(input)
         local bounds = key == "scale" and {0.5, 2} or key == "volume" and {0, 100} or {0, 60}
         if NR.Number(input[key], bounds[1], bounds[2]) then result[key] = input[key] end
     end
-    for _, key in ipairs({"hideOnUse", "tts", "countdown", "sound"}) do
+    for _, key in ipairs({"hideOnUse", "tts", "countdown", "sound", "autoBurst"}) do
         if type(input[key]) == "boolean" then result[key] = input[key] end
     end
     if type(input.glow) == "string" and #input.glow <= 500 then result.glow = input.glow end
+    if type(input.soundChoice) == "string" and #input.soundChoice <= 200 then result.soundChoice = input.soundChoice end
     if NR.Number(input.voice, 0, 100000) then result.voice = input.voice end
     return result
 end

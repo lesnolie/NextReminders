@@ -7,12 +7,14 @@ local button, label, edit, check = NR.Theme.Button, NR.Theme.Label, NR.Theme.Edi
 function UI:Message(text) self.message:SetText(text) end
 
 function UI:Refresh()
-    self.dataVersion:SetText("v" .. NR.version .. "\n\n数据 " .. NR.BossData.dataVersion)
+    self.dataVersion:SetText("v" .. NR.version .. "  ·  数据 " .. NR.BossData.dataVersion)
     local s = NR.db.settings
     self.lead:SetText(tostring(s.lead)); self.window:SetText(tostring(s.window)); self.glow:SetText(s.glow)
     for key, control in pairs(self.checks) do control:SetChecked(s[key]) end
     self.volume:SetText(tostring(s.volume))
-    self.enableButton:SetText(NR.db.enabled~=false and "提醒已开启" or "提醒已停用")
+    self.soundValues = {}
+    for key in pairs(self.soundPicks) do self:SetSoundChoice(key,s[key]) end
+    self:PaintEnable(); self:ShowMemory()
     self:Message(self:PageHint())
 end
 
@@ -27,6 +29,7 @@ function UI:Parse()
     local text=self.note:GetText()
     local plan,err
     if text:match("^%s*NRDungeon:") or text:match("\n%s*NRDungeon:") then plan,err=NR.EventPlans.ParseDungeon(text)
+    elseif text:match("^%s*NRPlan:3;") or text:match("\n%s*NRPlan:3;") then plan,err=NR.TimelinePlans.Parse(text)
     elseif text:match("^%s*NRPlan:") or text:match("\n%s*NRPlan:") then plan,err=NR.EventPlans.Parse(text)
     else plan, err = NR.ParseNote(text, { personal = self.personal:GetChecked(),
         encounterID = tonumber(self.encounter:GetText()), difficulty = targetDifficulty or "mythic",
@@ -44,7 +47,7 @@ function UI:Parse()
         self:Message("整副本检查通过；预览可切换首领。事件识别仍需游戏核对。")
         return
     end
-    if plan.kind=="events" then
+    if plan.kind=="events" or plan.kind=="timeline3" then
         local boss=NR.BossData.encounters[plan.encounterID]
         self.summary:SetText((boss and boss.name or plan.name).."\n专精 "..plan.specID.." · "..plan.difficulty.." · "..#plan.rows.." 条规则\n含事件条件、次数和等待提示。")
         self.bindingScroll:Hide(); self.bindingTitle:Hide()
@@ -61,27 +64,54 @@ function UI:Parse()
     table.sort(anchors)
     table.insert(anchors, 1, "pull")
     local function anchorLabel(anchor)
-        return anchor == "pull" and "开打（确认此来源阶段从开打开始）" or definition.anchors[anchor]
+        if anchor == "pull" then return "开打（确认此来源阶段从开打开始）" end
+        if anchor == "stage" then return "BigWigs 阶段（自动）" end
+        if anchor == "time" then return "按右侧时间（开打后）" end
+        return definition.anchors[anchor]
     end
+    self.fallbacks = self.fallbacks or {}
+    for _, control in ipairs(self.fallbacks) do control:Hide() end
     for index, phase in ipairs(phases) do
         local sourcePhase = phase
+        local choices = { unpack(anchors) }
+        if NR.Stages.Supports(plan.encounterID, sourcePhase) then table.insert(choices, 2, "stage") end
+        choices[#choices + 1] = "time"
         local choice = 0
-        local control = self.binders[index]
+        for position, anchor in ipairs(choices) do if plan.phaseBindings[sourcePhase] == anchor then choice = position end end
+        local control, timeBox = self.binders[index], self.fallbacks[index]
         if not control then
-            control = button(self.bindingContent, "", 360, 0, -(index - 1) * 34, function() end)
-            control:SetHeight(28)
+            control = button(self.bindingContent, "", 272, 0, -(index - 1) * 40, function() end, "field")
             self.binders[index] = control
         end
-        control:SetText("来源 P" .. sourcePhase .. " → 点击选择游戏节点")
+        if not timeBox then
+            timeBox = edit(self.bindingContent, 92, 284, -(index - 1) * 40)
+            self.fallbacks[index] = timeBox
+        end
+        local function show()
+            local bound = choices[choice]
+            control:SetText("P" .. sourcePhase .. " → " .. (bound and anchorLabel(bound) or "未绑定，点击选择"))
+        end
+        show()
         control:SetScript("OnClick", function()
             choice = choice + 1
-            if choice > #anchors then choice = 0 end
-            plan.phaseBindings[sourcePhase] = anchors[choice] or false
-            control:SetText("P" .. sourcePhase .. " → " .. (choice == 0 and "未绑定" or anchorLabel(anchors[choice])))
+            if choice > #choices then choice = 0 end
+            plan.phaseBindings[sourcePhase] = choices[choice] or false
+            show()
         end)
-        control:Show()
+        -- Transition time from the pull: used by "time", and by "stage" when BigWigs is absent.
+        timeBox:SetScript("OnTextChanged", nil)
+        timeBox:SetText("m:ss")
+        timeBox:SetScript("OnTextChanged", function()
+            local seconds = NR.ParseClock(timeBox:GetText())
+            plan.phaseFallback[sourcePhase] = seconds
+            if seconds and not plan.phaseBindings[sourcePhase] then
+                for position, anchor in ipairs(choices) do if anchor == "time" then choice = position end end
+                plan.phaseBindings[sourcePhase] = "time"; show()
+            end
+        end)
+        control:Show(); timeBox:Show()
     end
-    self.bindingContent:SetHeight(math.max(98,#phases*34))
+    self.bindingContent:SetHeight(math.max(112,#phases*40))
     if #phases>0 then self.bindingScroll:Show(); self.bindingTitle:Show()
     else self.bindingScroll:Hide(); self.bindingTitle:Hide() end
     local difficultyLabels = {normal="普通",heroic="英雄",mythic="史诗／大秘境"}
@@ -96,10 +126,12 @@ function UI:Parse()
     end
     for index = 1, math.min(2 - (times and 1 or 0), #plan.rows) do
         local row = plan.rows[index]
-        summary[#summary + 1] = string.format("P%d + %.1f 秒　%s", row.phase, row.time, NR.Theme.SpellName(row.spellID))
+        summary[#summary + 1] = string.format("P%s + %.1f 秒　%s", NR.PhaseLabel(row.phase), row.time, NR.Theme.SpellName(row.spellID))
     end
     self.summary:SetText(table.concat(summary, "\n"))
-    self:Message(#phases > 0 and "逐行点击绑定来源阶段。编号相同不代表节点相同，请核对含义。" or "预览成功。保存会启用此方案，并备份此首领原方案。")
+    local stages = NR.BossData.stages[plan.encounterID]
+    self:Message(#phases > 0 and "核对每个来源阶段：BigWigs 自动需要装 BigWigs；右侧填开打后几秒转阶段（如 2:15）作为备用。"
+        .. (stages and stages.note and " " .. stages.note or "") or "预览成功。保存会启用此方案，并备份此首领原方案。")
     if definition and definition.warning then self:Message(self.message:GetText() .. " " .. definition.warning) end
     if plan.sourceDifficulty and plan.sourceDifficulty ~= plan.difficulty then
         self:Message(self.message:GetText() .. " 跨难度复用：原施法秒数保留，请核对实际机制时点。")
@@ -133,6 +165,13 @@ function UI:Save()
     local input, err = self:CurrentPlan()
     if not input then self:Message(err); return end
     local ok
+    if input.kind=="timeline3" then
+        ok,err=NR.TimelinePlans.Save(input)
+        if not ok then self:Message(err); return end
+        NR.db.lastPlanKind="timeline3"
+        self:Message("已保存时间轴方案；本专精同首领优先使用，旧方案保留。固定兜底不是实测。")
+        return
+    end
     if input.kind=="dungeon" then
         ok,err=NR.EventPlans.SaveDungeon(input)
         if not ok then self:Message(err);return end
@@ -169,9 +208,24 @@ function UI:SaveSettings()
     end
     local settings = NR.Copy(NR.db.settings)
     settings.lead, settings.window, settings.volume, settings.glow = lead, window, volume, self.glow:GetText()
+    for key,value in pairs(self.soundValues or {}) do settings[key] = value end
     for key, control in pairs(self.checks) do settings[key] = control:GetChecked() and true or false end
     NR.db.settings = NR.Settings(settings)
     self:Message("设置已保存。团框发光填写 player 或玩家名字，用逗号分开；支持暴雪原生团框。")
+end
+
+-- Dropdown of our voice clips, opening upward (there is no room below the card); picking one previews it.
+function UI:OpenSoundMenu(slot,owner)
+    NR.Theme.Menu(owner,NR.Sounds.List(),self.soundValues[slot],function(entry)
+        self:SetSoundChoice(slot,entry.key)
+        NR.Sounds.Play(entry.key)
+    end,true)
+end
+
+function UI:SetSoundChoice(slot,key)
+    local entry=NR.Sounds.Find(key,NR.defaults[slot])
+    self.soundValues[slot]=entry.key
+    self.soundPicks[slot]:SetText(entry.name)
 end
 
 function UI:SetPage(name)
@@ -180,43 +234,75 @@ function UI:SetPage(name)
     if name == "settings" then self.settingsPage:Show()
     else self.importPage:Show() end
     self.importTab:SetSelected(name == "import"); self.settingsTab:SetSelected(name == "settings")
+    self.railImport:SetSelected(name == "import"); self.railSettings:SetSelected(name == "settings")
     if self.note then self.note:ClearFocus() end
     -- The status line is shared by both pages; don't leave one page's hint on the other.
     if self.message then self:Message(self:PageHint()) end
 end
 
+function UI:PaintEnable()
+    local on=NR.db.enabled~=false
+    self.enableButton:SetText(on and "提醒已开启" or "提醒已停用")
+    self.enableButton.themeStyle=on and "primary" or "outline"; self.enableButton:Paint()
+end
+
+function UI:ShowMemory(before)
+    local now=NR.MemoryKB()
+    if not now then self.memoryLabel:SetText("插件占用：游戏未提供"); return end
+    self.memoryLabel:SetText(before and string.format("%.0f KB → %.0f KB",before,now) or string.format("插件占用 %.0f KB",now))
+end
+
+-- Layout: icon rail on the left, brand + page tabs + switch + close along the top, white cards on a grey canvas.
+local W, H, X, CW = 1040, 700, 104, 912
+
 function UI:Create()
     local T = NR.Theme
-    local frame = T.Window("NextRemindersWindow",960,680,"NextReminders")
+    local frame = T.Window("NextRemindersWindow",W,H,"NextReminders")
     self.frame = frame
-    local side = T.Panel(frame,0,-58,152,622,"header")
-    self.importTab = button(frame,"方案导入",120,16,-92,function() self:SetPage("import") end)
-    self.settingsTab = button(frame,"提醒设置",120,16,-138,function() self:SetPage("settings") end)
-    self.dataVersion = label(side,"",16,-512,122,"small"); self.dataVersion:SetHeight(92)
+    local header = frame.header
+    frame.brand:ClearAllPoints(); frame.brand:SetPoint("TOPLEFT",X,-22); frame.brand:SetWidth(200)
+    self.dataVersion = label(header,"",X,-52,260,"tiny")
+    local rail = T.Panel(frame,16,-16,72,H-32,"panel",{radius=36,shadow=false})
+    local logo = rail:CreateTexture(nil,"ARTWORK"); logo:SetTexture(T.media.."ui_logo.tga"); logo:SetSize(44,44); logo:SetPoint("TOP",0,-14)
+    self.railImport = T.IconButton(rail,"import",44,14,-92,function() self:SetPage("import") end,"方案导入")
+    self.railSettings = T.IconButton(rail,"settings",44,14,-148,function() self:SetPage("settings") end,"提醒设置")
+    self.railPreview = T.IconButton(rail,"play",44,14,-204,function() SlashCmdList.NEXTREMINDERS("preview") end,"播放最近方案")
+    local tabs = T.Panel(header,404,-14,232,48,"panel",{radius=24,shadow=false})
+    self.importTab = button(tabs,"方案导入",108,6,-6,function() self:SetPage("import") end,"ghost")
+    self.settingsTab = button(tabs,"提醒设置",108,118,-6,function() self:SetPage("settings") end,"ghost")
+    self.enableButton=button(header,"提醒已开启",140,W-60-12-140,-20,function()
+        if InCombatLockdown() then self:Message("请脱战后切换提醒总开关"); return end
+        NR.db.enabled=NR.db.enabled==false
+        self:PaintEnable()
+    end,"primary","power")
     self.importPage = CreateFrame("Frame",nil,frame); self.importPage:SetAllPoints(frame)
     self.settingsPage = CreateFrame("Frame",nil,frame); self.settingsPage:SetAllPoints(frame)
+
     local page = self.importPage
-    label(page,"导入提醒方案",176,-88,650,"title")
-    label(page,"从 Lorrgs 复制，粘贴后即可检查和播放。",176,-121,650,"muted")
-    label(page,"首领编号（MRT）",176,-154,150,"small")
-    self.encounter = edit(page,140,176,-177)
-    label(page,"使用难度",334,-154,180,"small")
+    label(page,"导入提醒方案",X,-88,600,"title")
+    label(page,"大秘境粘贴网站生成的整副本方案；团本粘贴 Lorrgs MRT／NSRT 文本。先检查，再保存启用。",X,-124,CW,"muted")
+    local options = T.Panel(page,X,-160,CW,72)
+    label(options,"首领编号（MRT）",20,-27,120,"small")
+    self.encounter = edit(options,120,136,-18)
+    label(options,"使用难度",284,-27,70,"small")
     self.difficulty = "source"
-    self.difficultyButton = button(page,"随导出",180,334,-177,function()
+    self.difficultyButton = button(options,"随导出",180,350,-18,function()
         local order = { source="heroic",heroic="normal",normal="mythic",mythic="source" }
         self.difficulty = order[self.difficulty]
         self.difficultyButton:SetText(({source="随导出",heroic="英雄",normal="普通",mythic="史诗／大秘境"})[self.difficulty])
         self.preview = nil
-    end)
-    self.personal = check(page,"作为我的个人方案",538,-182); self.personal:SetChecked(true)
-    local notePanel = T.Panel(page,176,-230,330,322)
+    end,"field")
+    self.personal = check(options,"作为我的个人方案",560,-24); self.personal:SetChecked(true)
+
+    local noteCard = T.Panel(page,X,-248,448,340)
+    label(noteCard,"方案文本",20,-18,200,"heading")
+    self.noteFocus = label(noteCard,"点击输入",340,-21,88,"small"); self.noteFocus:SetJustifyH("RIGHT")
+    local notePanel = T.Panel(noteCard,16,-52,416,272,"input",{radius=14})
     self.notePanel = notePanel
-    label(notePanel,"网站方案 / Lorrgs 导出文本",16,-16,200)
-    self.noteFocus = label(notePanel,"点击输入",222,-16,92,"small")
-    self.noteHint = label(notePanel,"点击这里，按 Ctrl+V 粘贴方案",20,-55,280,"muted")
-    local scroll = T.Scroll(page,192,-281,288,251)
+    self.noteHint = label(notePanel,"点击这里，按 Ctrl+V 粘贴方案",16,-16,380,"muted")
+    local scroll = T.Scroll(page,X+24,-308,384,256)
     self.note = CreateFrame("EditBox",nil,scroll)
-    self.note:SetMultiLine(true); self.note:SetFontObject(GameFontHighlight); self.note:SetWidth(280)
+    self.note:SetMultiLine(true); self.note:SetFontObject(GameFontHighlight); T.Font(self.note,"body"); self.note:SetWidth(376)
     self.note:SetHeight(255); self.note:SetMaxLetters(200000); self.note:SetAutoFocus(false)
     self.note:SetTextColor(unpack(T.colors.text))
     self.note:EnableMouse(true); self.note:SetTextInsets(4,4,4,4)
@@ -225,7 +311,7 @@ function UI:Create()
     -- than estimating text widths (which fails for Chinese text and wrapped lines).
     local caret = self.note:CreateTexture(nil,"OVERLAY",nil,7)
     self.noteCaret = caret
-    caret:SetColorTexture(unpack(T.colors.accent)); caret:Hide()
+    caret:SetColorTexture(unpack(T.colors.ink)); caret:Hide()
     local caretPosition, blinkElapsed
     local function stopCaret()
         caret:Hide(); self.note:SetScript("OnUpdate",nil)
@@ -244,13 +330,12 @@ function UI:Create()
     local function focusNote(_,mouseButton)
         if mouseButton=="LeftButton" then self.note:SetFocus() end
     end
-    notePanel:EnableMouse(true); notePanel:SetScript("OnMouseDown",focusNote)
-    scroll:EnableMouse(true); scroll:SetScript("OnMouseDown",focusNote)
+    for _,area in ipairs({noteCard,notePanel,scroll}) do area:EnableMouse(true); area:SetScript("OnMouseDown",focusNote) end
     self.note:SetScript("OnMouseDown",focusNote)
     local function paintFocus(focused)
-        notePanel:SetBackdropBorderColor(unpack(T.colors[focused and "accent" or "border"]))
+        T.Paint(notePanel,focused and "panel" or "input",focused and "ink" or "border")
         self.noteFocus:SetText(focused and "正在输入" or "点击输入")
-        self.noteFocus:SetTextColor(unpack(T.colors[focused and "accent" or "muted"]))
+        self.noteFocus:SetTextColor(unpack(T.colors[focused and "positive" or "muted"]))
         if focused or self.note:GetText()~="" then self.noteHint:Hide() else self.noteHint:Show() end
         refreshCaret()
     end
@@ -284,20 +369,26 @@ function UI:Create()
     self.note:SetText(""); self.note:SetCursorPosition(0)
     page:SetScript("OnHide",function() self.note:ClearFocus() end)
     paintFocus(false)
-    local checkPanel = T.Panel(page,522,-230,414,322)
-    label(checkPanel,"方案检查",16,-16,382)
-    self.summary = label(checkPanel,"粘贴文本后，点击“检查导入”。",16,-50,382,"muted")
-    self.summary:SetHeight(110)
-    self.bindingTitle=label(checkPanel,"阶段绑定",16,-174,382,"small")
-    self.bindingScroll=T.Scroll(page,538,-434,362,98)
-    self.bindingContent=CreateFrame("Frame",nil,self.bindingScroll); self.bindingContent:SetSize(360,98)
+
+    local checkPanel = T.Panel(page,X+464,-248,448,340)
+    label(checkPanel,"方案检查",20,-18,300,"heading")
+    self.summary = label(checkPanel,"粘贴文本后，点击“检查导入”。",20,-56,408,"muted")
+    self.summary:SetHeight(120)
+    self.bindingTitle=label(checkPanel,"阶段绑定",20,-188,408,"small")
+    self.bindingScroll=T.Scroll(page,X+484,-460,400,112)
+    self.bindingContent=CreateFrame("Frame",nil,self.bindingScroll); self.bindingContent:SetSize(380,112)
     self.bindingScroll:SetScrollChild(self.bindingContent)
     self.bindingTitle:Hide(); self.bindingScroll:Hide()
-    button(page,"检查导入",100,176,-576,function() self:Parse() end)
-    self.saveButton = button(page,"保存并启用",128,288,-576,function() self:Save() end,"primary")
-    self.playPreview = button(page,"播放预览",128,428,-576,function() self:Play() end)
-    self.pausePlan = button(page,"暂停方案",92,568,-576,function()
+
+    button(page,"检查导入",112,X,-606,function() self:Parse() end,nil,"check")
+    self.saveButton = button(page,"保存并启用",132,X+124,-606,function() self:Save() end,"primary")
+    self.playPreview = button(page,"播放预览",128,X+268,-606,function() self:Play() end,nil,"play")
+    self.pausePlan = button(page,"暂停方案",120,X+408,-606,function()
         if InCombatLockdown() then self:Message("请脱战后操作") return end
+        if NR.db.lastPlanKind=="timeline3" then
+            local ok,err=NR.TimelinePlans.Pause(NR.db.lastTimelinePlan)
+            self:Message(ok and "时间轴已暂停；旧方案仍保留" or err); return
+        end
         if NR.db.lastPlanKind=="dungeon" then
             local ok,err=NR.EventPlans.PauseDungeon(NR.db.lastDungeon)
             self:Message(ok and "最近导入的整副本方案已暂停" or err);return
@@ -310,9 +401,13 @@ function UI:Create()
         end
         local key=NR.db.lastPlan
         if key and NR.db.plans[key] then NR.db.plans[key].enabled=false; self:Message("最近保存的方案已暂停") end
-    end)
-    self.rollback = button(page,"回滚",72,672,-576,function()
+    end,nil,"pause")
+    self.rollback = button(page,"回滚",88,X+540,-606,function()
         if InCombatLockdown() then self:Message("请脱战后操作") return end
+        if NR.db.lastPlanKind=="timeline3" then
+            local ok,err=NR.TimelinePlans.Rollback(NR.db.lastTimelinePlan)
+            self:Message(ok and "已交换时间轴方案与备份" or err); return
+        end
         if NR.db.lastPlanKind=="dungeon" then
             local ok,err=NR.EventPlans.RollbackDungeon(NR.db.lastDungeon)
             self:Message(ok and "已交换整副本规则和备份" or err);return
@@ -327,37 +422,66 @@ function UI:Create()
             self:Message("已交换当前方案和备份方案")
         else self:Message("没有可回滚的方案") end
     end)
-    self.enableButton=button(page,"提醒已开启",180,756,-576,function()
-        if InCombatLockdown() then self:Message("请脱战后切换提醒总开关"); return end
-        NR.db.enabled=NR.db.enabled==false
-        self.enableButton:SetText(NR.db.enabled and "提醒已开启" or "提醒已停用")
-    end)
+
     page = self.settingsPage
-    label(page,"提醒与声音",176,-88,650,"title")
-    label(page,"调整显示时机、声音和指定玩家的团框发光。",176,-121,650,"muted")
-    -- Text belongs to the panel it sits on: a child frame's backdrop covers its parent's own font strings.
-    local timing = T.Panel(page,176,-164,760,174)
-    label(timing,"显示时间",16,-16,400)
-    label(timing,"提前显示 · 秒",16,-62,136,"small"); self.lead=edit(timing,100,16,-88)
-    label(timing,"时点后保留 · 秒",178,-62,142,"small"); self.window=edit(timing,100,178,-88)
-    label(timing,"语音音量 · 0～100",340,-62,170,"small"); self.volume=edit(timing,100,340,-88)
-    label(timing,"例：提前 5 秒显示，技能用过后自动撤掉提醒。",498,-61,244,"muted"):SetHeight(74)
-    local toggles = T.Panel(page,176,-356,760,116)
+    label(page,"提醒与声音",X,-88,600,"title")
+    label(page,"调整显示时机、声音和指定玩家的团框发光。修改后点“保存设置”。",X,-124,CW,"muted")
+    -- Text belongs to the card it sits on: a child frame's textures cover its parent's own font strings.
+    local function figure(x,title,unit,hint)
+        local card=T.Panel(page,x,-160,296,132)
+        label(card,title,20,-18,200,"small")
+        local box=edit(card,120,20,-44,"number")
+        label(card,unit,152,-60,120,"muted")
+        label(card,hint,20,-102,256,"tiny")
+        return box
+    end
+    self.lead=figure(X,"提前显示","秒","技能时点前多久出现提醒")
+    self.window=figure(X+308,"时点后保留","秒","到点后没按，提醒再留多久")
+    self.volume=figure(X+616,"语音音量","0～100","技能语音和倒数的音量")
+
+    local toggles = T.Panel(page,X,-308,448,168)
+    label(toggles,"提醒开关",20,-18,300,"heading")
     self.checks = {
-        hideOnUse=check(toggles,"用过撤提醒",16,-26), tts=check(toggles,"技能语音",198,-26),
-        countdown=check(toggles,"3 秒倒数",380,-26), sound=check(toggles,"提示音效",562,-26),
+        hideOnUse=check(toggles,"用过撤提醒",20,-56), tts=check(toggles,"技能语音",232,-56),
+        countdown=check(toggles,"3 秒倒数",20,-92), sound=check(toggles,"提示音效",232,-92),
     }
-    for _,control in pairs(self.checks) do control.text:SetWidth(126) end
-    label(toggles,"技能语音与倒数可以分别开关。",16,-76,696,"small")
-    local glow = T.Panel(page,176,-490,760,102)
-    label(glow,"团框发光",16,-16,200)
-    self.glow=edit(glow,414,16,-50)
-    label(glow,"填 player 或玩家名字\n多个名字用逗号分隔",452,-47,288,"small"):SetHeight(44)
-    self.saveSettings = button(page,"保存设置",132,804,-616,function() self:SaveSettings() end,"primary")
-    self.message=label(frame,"",176,-628,610,"small"); self.message:SetHeight(40)
+    self.checks.autoBurst=check(toggles,"大秘境没配置的首领：开打和每次爆发好了都提醒",20,-128)
+    for _,control in pairs(self.checks) do control.text:SetWidth(150) end
+    self.checks.autoBurst.text:SetWidth(370)
+
+    local sounds = T.Panel(page,X+464,-308,448,168)
+    label(sounds,"提示音效",20,-18,300,"heading")
+    self.soundPicks = {}
+    local pick
+    pick = button(sounds,"",300,20,-52,function() self:OpenSoundMenu("soundChoice",pick) end,"field")
+    self.soundPicks.soundChoice=pick
+    button(sounds,"试听",96,332,-52,function()
+        if not NR.Sounds.Play(self.soundValues.soundChoice) then self:Message("当前选的是「不播放」。") end
+    end,nil,"sound")
+    label(sounds,"到点时播放一次（先 3、2、1 倒数）；几条同时到点只放一次。",20,-104,408,"tiny"):SetHeight(40)
+
+    local glow = T.Panel(page,X,-492,600,96)
+    label(glow,"团框发光",20,-18,200,"heading")
+    self.glow=edit(glow,300,20,-46)
+    label(glow,"填 player 或玩家名字，多个名字用逗号分隔；支持暴雪原生队伍／团队框。",336,-48,244,"tiny"):SetHeight(34)
+    local memory = T.Panel(page,X+616,-492,296,96)
+    label(memory,"内存",20,-18,120,"heading")
+    self.memoryLabel = label(memory,"",20,-56,140,"small")
+    self.cleanButton = button(memory,"清理内存",116,160,-46,function()
+        local before=NR.MemoryKB()
+        local ok,err=NR.Cleanup("manual")
+        if not ok then self:Message(err); return end
+        self:ShowMemory(before)
+        self:Message("已停止播放中的语音，释放插件用完的数据。")
+    end,nil,"clean")
+
+    self.saveSettings = button(page,"保存设置",140,W-24-140,-606,function() self:SaveSettings() end,"primary","check")
+    self.message=label(frame,"",X,-652,CW,"small"); self.message:SetHeight(36)
     -- Personal policy is authored on the website; no in-game rule editor is created.
     self:SetPage("import")
     frame:Hide(); frame:SetScript("OnShow",function() self:Refresh() end)
+    -- Closing the window is "done for now": free what the session left behind.
+    frame:SetScript("OnHide",function() NR.Cleanup("close") end)
 end
 
 function UI:Toggle()

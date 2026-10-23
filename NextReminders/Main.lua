@@ -54,6 +54,30 @@ local function snapshotTimeline(now)
     end
 end
 
+-- BigWigs is an optional stage source through its public message API; nothing else of it is read.
+local function bigWigsEncounter(module)
+    if type(module) ~= "table" or type(module.GetEncounterID) ~= "function" then return nil end
+    local ok, id = pcall(module.GetEncounterID, module)
+    return ok and NR.Number(id, 1, 1000000) and id or nil
+end
+
+local function hookBigWigs()
+    local loader = rawget(_G, "BigWigsLoader")
+    if NR.bigWigsHooked or type(loader) ~= "table" or type(loader.RegisterMessage) ~= "function" then return end
+    NR.bigWigsHooked = true
+    local owner = {}
+    loader.RegisterMessage(owner, "BigWigs_OnBossEngage", function(_, module)
+        local id, now = bigWigsEncounter(module), GetTime()
+        if not id then return end
+        NR.bigWigsEngage = { id = id, at = now }
+        if NR.engine.active and NR.engine.encounterID == id then NR.engine:StageReady(now) end
+    end)
+    loader.RegisterMessage(owner, "BigWigs_SetStage", function(_, module, stage)
+        local id = bigWigsEncounter(module)
+        if id and NR.engine.active and NR.engine.encounterID == id then NR.engine:Stage(stage, GetTime()) end
+    end)
+end
+
 local function initialize()
     NextRemindersDB = type(NextRemindersDB)=="table" and NextRemindersDB or {}
     NR.db = NextRemindersDB
@@ -70,6 +94,7 @@ local function initialize()
         else NR.Display:Emit(kind,row,value) end
     end, function() NR.Display:Clear() end, function() return InCombatLockdown() or NR.engine.active end)
     NR.UI:Create(); NR.PreviewUI:Create()
+    hookBigWigs()
     SLASH_NEXTREMINDERS1 = "/nr"
     SlashCmdList.NEXTREMINDERS = function(args)
         args = NR.Trim(args):lower()
@@ -100,6 +125,12 @@ local function initialize()
             local ok,err = NR.PreviewUI:Open(plan)
             if not ok then NR.Print(err) end
         elseif args == "stop" then NR.preview:Stop(); NR.engine:Stop(); NR.Display:Clear()
+        elseif args == "gc" then
+            local before = NR.MemoryKB()
+            local ok, err = NR.Cleanup("manual")
+            if not ok then NR.Print(err) return end
+            local after = NR.MemoryKB()
+            NR.Print(before and after and string.format("已清理：%.0f KB → %.0f KB", before, after) or "已清理")
         else NR.UI:Toggle() end
     end
     driver:SetScript("OnUpdate", function(_, elapsed)
@@ -126,6 +157,33 @@ local function initialize()
     end
 end
 
+-- Lua memory this addon holds, in KB (nil when the client does not report it).
+function NR.MemoryKB()
+    local update = UpdateAddOnMemoryUsage or C_AddOns and C_AddOns.UpdateAddOnMemoryUsage
+    local get = GetAddOnMemoryUsage or C_AddOns and C_AddOns.GetAddOnMemoryUsage
+    if not update or not get then return nil end
+    update()
+    local kb = get(addonName)
+    return NR.Number(kb, 0, 10000000) and kb or nil
+end
+
+-- "Done for now" cleanup: stop leftover voice, drop what the last fight or rehearsal built, then collect garbage.
+-- Never during combat, a boss fight or a running rehearsal (a full collection can stutter); it waits for combat to end.
+function NR.Cleanup(reason)
+    if InCombatLockdown() or NR.engine.active or (IsEncounterInProgress and IsEncounterInProgress()) then
+        NR.cleanupPending = true
+        return nil, "战斗中不清理，脱战后自动清理"
+    end
+    if NR.preview.running then return nil, "正在播放预览，停止后再清理" end
+    NR.cleanupPending = nil
+    NR.Display:Silence(); NR.Display:Clear()
+    NR.engine:Stop(); NR.preview:Stop()
+    if not NR.PreviewUI.frame:IsShown() then NR.PreviewUI.selectedPlan, NR.PreviewUI.selectedDungeon = nil, nil end
+    collectgarbage("collect")
+    NR.lastCleanup = reason
+    return true
+end
+
 driver:RegisterEvent("ADDON_LOADED")
 driver:SetScript("OnEvent", function(_, event, ...)
     if event == "ADDON_LOADED" then
@@ -138,6 +196,7 @@ driver:SetScript("OnEvent", function(_, event, ...)
     if event == "ENCOUNTER_START" then
         local encounterID, _, difficulty = ...
         if not NR.Number(encounterID,1,1000000) or not NR.Number(difficulty,0,1000) then return end
+        hookBigWigs()
         NR.preview:Stop(); NR.PreviewUI.frame:Hide(); NR.Display:Clear(); NR.UI.frame:Hide()
         local difficultyName = difficultyNames[difficulty]
         if not difficultyName then NR.engine:Stop(); return end
@@ -146,13 +205,23 @@ driver:SetScript("OnEvent", function(_, event, ...)
         if plan and not NR.ValidateBindings(plan) then NR.Print("方案阶段绑定已失效，本场不加载提醒"); plan=nil end
         local player=identity()
         local eventPlan=player.specID and NR.EventPlans.Get(player.specID,encounterID,difficultyName)
+        local timelinePlan=player.specID and NR.TimelinePlans.Get(player.specID,encounterID,difficultyName)
+        if player.specID and NR.TimelinePlans.Find(player.specID,encounterID,difficultyName) then
+            plan,eventPlan=nil,nil
+        end
         -- A complete M+ bundle supersedes legacy static notes for this spec/dungeon.
         -- Keep those notes stored, so another spec and rollback still use their own context.
         if difficulty==8 and NR.EventPlans.OwnsDungeonEncounter(player.specID,encounterID) then plan=nil end
         if eventPlan and eventPlan.dungeonID and difficulty~=8 then eventPlan=nil end
-        if not NR.db.enabled then plan,eventPlan=nil,nil end
+        if difficulty==8 and not plan and not eventPlan and player.specID and NR.Settings(NR.db.settings).autoBurst then
+            eventPlan=NR.EventPlans.Default(player.specID,encounterID)
+        end
+        if not NR.db.enabled then plan,eventPlan,timelinePlan=nil,nil,nil end
         NR.engine:Begin(encounterID,difficultyName,plan,NR.db.settings,now,player,
-            eventPlan)
+            eventPlan,timelinePlan)
+        -- BigWigs may have engaged on this same ENCOUNTER_START before our handler ran.
+        local engaged = NR.bigWigsEngage
+        if engaged and engaged.id == encounterID and now - engaged.at <= 5 then NR.engine:StageReady(now) end
         snapshotTimeline(now)
     elseif event=="ENCOUNTER_WARNING" then
         local info=...
@@ -160,7 +229,7 @@ driver:SetScript("OnEvent", function(_, event, ...)
     elseif event=="SPELL_UPDATE_COOLDOWN" then
         -- Scan configured public spell IDs; event payload IDs may be secret.
         NR.engine:CooldownUpdate(now)
-    elseif event == "ENCOUNTER_END" then NR.engine:Stop(); NR.Display:Clear()
+    elseif event == "ENCOUNTER_END" then NR.engine:Stop(); NR.Display:Clear(); NR.Cleanup("encounter")
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
         local unit, _, spellID = ...
         if NR.Public(unit) and unit == "player" then
@@ -184,5 +253,8 @@ driver:SetScript("OnEvent", function(_, event, ...)
             end
         end
     elseif event == "ENCOUNTER_TIMELINE_EVENT_REMOVED" then NR.engine:Timeline("removed",{id=(...)},now)
-    else NR.Display:CacheFrames() end
+    else
+        NR.Display:CacheFrames()
+        if event == "PLAYER_REGEN_ENABLED" and NR.cleanupPending then NR.Cleanup("combat") end
+    end
 end)

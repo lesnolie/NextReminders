@@ -14,17 +14,23 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
         self.active, self.rows = false, {}
         self.added, self.canceled, self.events = {}, {}, {}
         self.bossEvents=nil
+        self.timelinePlan=nil
         self.readyWatches,self.readyObservations={},{}
     end
 
-    function engine:Begin(encounterID, difficulty, plan, settings, now, identity, eventPlan)
+    function engine:Begin(encounterID, difficulty, plan, settings, now, identity, eventPlan, timelinePlan)
         self:Stop()
         self.trace, self.startTime, self.encounterID, self.difficulty = {}, now, encounterID, difficulty
         self.settings, self.identity = NR.Settings(settings), identity or {}
         self.definition = previewDefinition or (difficulty == "mythic" and NR.BossData.encounters[encounterID] or nil)
         self.anchorTimes = { pull = now }
+        self.mechanicTokens = {}
+        self.stageRuleCounts,self.timelineStage={},1
         self.rows, self.added, self.canceled, self.events = {}, {}, {}, {}
         self.sequence, self.logicalPhase, self.lastTransition = 1, 1, now
+        -- BigWigs stages only exist for live fights; preview rehearses them as manual phases.
+        self.stageMap = not previewDefinition and NR.BossData.stages[encounterID] or nil
+        self.stage, self.stageChanges, self.stageReady, self.usesStages, self.stageWarned = 1, 0, false, false, false
         self.active = true
         self.readyWatches,self.readyObservations={},{}; self.lastReadyPoll=nil
         self.bossEvents=NR.BossEvents.New(NR.EventPlans.Definition(encounterID,difficulty),
@@ -34,12 +40,20 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
         if plan and plan.enabled and plan.encounterID == encounterID and plan.difficulty == difficulty and valid then
             for _, input in ipairs(plan.rows) do
                 local binding = plan.phaseBindings[input.phase]
+                local fallback = plan.phaseFallback and plan.phaseFallback[input.phase]
                 local allowed = plan.personal or self:TagMatches(input.tag)
-                if allowed and (binding == "pull" or (self.definition and self.definition.anchors[binding])) then
-                    local row = NR.Copy(input)
-                    row.anchor = binding
-                    self.rows[#self.rows + 1] = row
+                local row
+                if not allowed then row = nil
+                elseif binding == "stage" and self.stageMap then
+                    row = NR.Copy(input); row.anchor = "stage:" .. input.phase; row.fallback = fallback
+                    self.usesStages = true
+                elseif binding == "stage" or binding == "time" then
+                    -- Without a stage source a BigWigs binding can only use the entered transition time.
+                    if fallback then row = NR.Copy(input); row.anchor = "pull"; row.time = fallback + input.time end
+                elseif binding == "pull" or (self.definition and self.definition.anchors[binding]) then
+                    row = NR.Copy(input); row.anchor = binding
                 end
+                if row then self.rows[#self.rows + 1] = row end
             end
         end
         if eventPlan and NR.EventPlans.Validate(eventPlan) and eventPlan.enabled and eventPlan.encounterID==encounterID
@@ -54,7 +68,58 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
                 end
             end
         end
+        -- NRPlan:3 keeps timeline rows in a separate schema and storage bucket. Fixed fallback is explicit:
+        -- a negative offset never pretends that an actual-only mechanic signal can be known early.
+        if timelinePlan and NR.TimelinePlans.Validate(timelinePlan) and timelinePlan.enabled ~= false
+            and timelinePlan.encounterID==encounterID and timelinePlan.difficulty==difficulty
+            and timelinePlan.specID==self.identity.specID then
+            self.timelinePlan=NR.Copy(timelinePlan)
+            for _,input in ipairs(timelinePlan.rows) do
+                if input.enabled~=false then
+                    local row=NR.Copy(input)
+                    row.id="timeline:"..input.id
+                    row.timelineRow=true
+                    row.eventRow=true
+                    row.actionName,row.actionIcon,row.useSpellID=NR.EventPlans.Action(row)
+                    local kind,anchorID=NR.BossRules.ParseAnchor(input.anchor)
+                    local predicted=kind=="mechanic"
+                        and NR.BossRules.PredictionSupported(encounterID,difficulty,anchorID)
+                    local signal=kind=="start" or (kind=="mechanic"
+                        and NR.BossRules.SignalSupported(encounterID,difficulty,anchorID))
+                    if kind=="stage" then
+                        local stage=NR.BossRules.FindStage(encounterID,difficulty,anchorID)
+                        local stageSignal=stage and stage.signal
+                        signal=type(stageSignal)=="table" and stageSignal.enabled==true
+                    end
+                    local fixed=input.timing=="fixed"
+                        or (input.timing=="auto" and input.offset<0 and not predicted)
+                        or (input.timing=="auto" and input.offset>=0 and not signal)
+                    if fixed then
+                        row.anchor="pull"; row.time=input.fallback; row.timingUsed="fixed"
+                    elseif kind=="start" then
+                        row.anchor="pull"; row.time=input.offset; row.timingUsed="signal"
+                    elseif kind=="stage" then
+                        row.anchor="stage-rule:"..anchorID; row.time=input.offset
+                        row.timingUsed=input.timing=="predicted" and "predicted" or "signal"
+                    elseif kind=="mechanic" then
+                        local occurrence=input.occurrence=="every" and "every" or tostring(input.occurrence)
+                        row.anchor="mechanic:"..anchorID..":"..occurrence; row.time=input.offset
+                        row.timingUsed=(input.timing=="predicted" or (input.timing=="auto" and predicted))
+                            and "predicted" or "signal"
+                    end
+                    if row.anchor=="pull" then row.target=now+row.time end
+                    self.rows[#self.rows+1]=row
+                    if row.hold and row.anchor~="pull" then row.held=true; self.emit("hold",row) end
+                end
+            end
+        end
         self.bossEvents:Fire("start",now,now,false)
+        if self.timelinePlan then
+            local _,rules=NR.BossRules.For(encounterID,difficulty)
+            for _,stage in ipairs(rules.stages) do
+                if stage.signal and stage.signal.kind=="pull" then self:StageRule(stage.id,now,now) end
+            end
+        end
         self:Log("start", encounterID, now)
         self:Tick(now)
     end
@@ -82,8 +147,15 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
                 elseif state=="ready" and watch.armed then self:CooldownReady(id,now) end
             end
         end
+        -- No BigWigs engage shortly after the pull: stage rows fall back to their entered transition times.
+        local fallbackPull = self.usesStages and not self.stageReady and now - self.startTime >= 5 and self.anchorTimes.pull
+        if fallbackPull and not self.stageWarned then
+            self.stageWarned = true
+            self:Log("stage-source", "none", now)
+            self.emit("phase", nil, "没收到 BigWigs 阶段，改用填写的转阶段时间；没填的阶段不会提醒")
+        end
         for _, row in ipairs(self.rows) do
-            local anchor = not row.eventRow and self.anchorTimes[row.anchor]
+            local anchor = not row.eventRow and (self.anchorTimes[row.anchor] or fallbackPull and row.fallback and fallbackPull + row.fallback)
             local target=row.eventRow and row.target or anchor and anchor+row.time
             if target and not row.done then
                 row.target = target
@@ -115,6 +187,10 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
                 row.used=true
                 if self.settings.hideOnUse then row.done,row.shown=true,false;self.emit("hide",row) end
                 self:Log("used", spellID, now)
+            elseif row.after=="ready" and row.spellID==spellID and row.target and now>=row.target-row.time and not self.readyWatches[row.id] then
+                -- Pressed late or with the reminder hidden: once the row's pull/event has happened, the first use
+                -- still starts ready reminders. Casts before the event (an opener before vulnerability) do not.
+                self:WatchReady(row,now)
             end
         end
     end
@@ -193,6 +269,86 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
                 self:Log("used",row.actionName or row.spellID,now)
             end
         end
+    end
+
+    function engine:StageReady(now)
+        if not self.active or not self.stageMap or self.stageReady then return end
+        self.stageReady = true
+        self:Log("stage-source", "BigWigs", now)
+    end
+
+    -- NRPlan:3 stage anchors use shared-rule IDs instead of Lorrgs phase numbers.
+    function engine:StageRule(stageID, at, now)
+        if not self.active or not self.timelinePlan then return end
+        local stage=NR.BossRules.FindStage(self.encounterID,self.difficulty,stageID)
+        if not stage then return end
+        self.stageRuleCounts=self.stageRuleCounts or {}
+        local count=(self.stageRuleCounts[stageID] or 0)+1
+        self.stageRuleCounts[stageID]=count
+        for _,row in ipairs(self.rows) do
+            if row.timelineRow and row.anchor=="stage-rule:"..stage.id
+                and (row.occurrence=="every" or row.occurrence==count) then
+                if row.shown or row.held then self.emit("hide",row) end
+                row.target=(at or now)+row.time
+                row.done,row.shown,row.held,row.used,row.lastCountdown=false,false,false,false,nil
+            end
+        end
+        self:Log("timeline-stage",stage.id,now)
+        self.emit("phase",stage.id,stage.label)
+        self:Tick(now)
+    end
+
+    -- Predicted events may arrive before the mechanic. A later actual event replaces the anchor
+    -- while leaving already-finished reminders finished.
+    function engine:MechanicEvent(mechanicID, occurrence, at, now, predicted, token)
+        if not self.active or not self.timelinePlan then return end
+        local mechanic=NR.BossRules.FindMechanic(self.encounterID,self.difficulty,mechanicID)
+        if not mechanic or not NR.Number(occurrence,1,20) or occurrence%1~=0 then return end
+        local key="mechanic:"..mechanic.id..":"..occurrence
+        local receipt=tostring(token)..":"..tostring(at)..":"..tostring(predicted)
+        if self.mechanicTokens[key]==receipt then return end
+        self.mechanicTokens[key]=receipt
+        for _,row in ipairs(self.rows) do
+            if row.timelineRow and (row.anchor==key or row.anchor=="mechanic:"..mechanic.id..":every")
+                and (not predicted or row.timingUsed=="predicted") then
+                local same=row.eventCount==occurrence
+                if not same then
+                    if row.shown or row.held then self.emit("hide",row) end
+                    row.done,row.used,row.shown,row.held,row.lastCountdown=false,false,false,false,nil
+                end
+                if not row.done and not row.used then row.target=(at or now)+row.time end
+                row.eventCount=occurrence
+            end
+        end
+        self:Log("timeline-mechanic",mechanic.id.." #"..occurrence..(predicted and " predicted" or " actual"),now)
+        self.emit("phase",mechanic.id,mechanic.label)
+        self:Tick(now)
+    end
+
+    -- BigWigs_SetStage for this encounter. Repeated or initial stage messages are not transitions.
+    function engine:Stage(stage, now)
+        if self.active and self.timelinePlan and NR.Phase(stage) and stage~=self.timelineStage then
+            self.timelineStage=stage
+            local stageID=NR.BossRules.BigWigsStageID(self.encounterID,self.difficulty,stage)
+            if stageID then self:StageRule(stageID,now,now) end
+        end
+        if not self.active or not self.stageMap or not NR.Phase(stage) then return end
+        self:StageReady(now)
+        if stage == self.stage then return end
+        self.stage, self.stageChanges = stage, self.stageChanges + 1
+        local phase = NR.Stages.PhaseFor(self.stageMap, stage, self.stageChanges)
+        self:Log("stage", stage .. (phase and " → P" .. phase or ""), now)
+        local key = phase and "stage:" .. phase
+        if not key or self.anchorTimes[key] then return end
+        self.anchorTimes[key] = now
+        if self.usesStages then
+            -- Earlier source phases ended: drop their future reminders, let ones already on screen finish.
+            for _, row in ipairs(self.rows) do
+                if not row.eventRow and not row.done and not row.shown and row.phase < phase then row.done = true end
+            end
+        end
+        self.emit("phase", phase, "BigWigs 阶段 " .. stage .. " → 来源 P" .. phase)
+        self:Tick(now)
     end
 
     function engine:Transition(now, logicalPhase)

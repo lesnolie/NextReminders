@@ -7,9 +7,12 @@ local function timeLabel(remaining)
     return remaining > 0 and (math.ceil(remaining) .. "秒") or "现在"
 end
 
+-- The voice list is read once per session (each call builds a new table); Cleanup drops it.
+local ttsVoices
 local function speak(text)
     if not C_VoiceChat or not C_VoiceChat.GetTtsVoices or not C_VoiceChat.SpeakText then return end
-    local voices = C_VoiceChat.GetTtsVoices() or {}
+    ttsVoices = ttsVoices or C_VoiceChat.GetTtsVoices() or {}
+    local voices = ttsVoices
     local voice = voices[1] and voices[1].voiceID
     for _, entry in ipairs(voices) do if entry.voiceID == NR.db.settings.voice then voice = entry.voiceID end end
     if not voice then return end
@@ -39,13 +42,13 @@ function D:Row(id)
     if self.rows[id] then return self.rows[id] end
     local frame = CreateFrame("Frame", nil, self.container, "BackdropTemplate")
     frame:SetSize(420, 48)
-    NR.Theme.Surface(frame,"input")
-    -- Keep the game visible through the bar without fading its text or icon.
+    -- Plain see-through bar (not the settings window's light cards): the game stays visible, text and icon keep full alpha.
+    frame:SetBackdrop({bgFile="Interface\Buttons\WHITE8X8",edgeFile="Interface\Buttons\WHITE8X8",edgeSize=1})
     frame:SetBackdropColor(0.035, 0.055, 0.086, 0.18)
     frame:SetBackdropBorderColor(0.153, 0.208, 0.286, 0.25)
     local stripe=frame:CreateTexture(nil,"ARTWORK")
     stripe:SetPoint("TOPLEFT"); stripe:SetPoint("BOTTOMLEFT"); stripe:SetWidth(3)
-    stripe:SetColorTexture(unpack(NR.Theme.colors.accent))
+    stripe:SetColorTexture(0.310, 0.831, 1, 1)
     frame.icon = frame:CreateTexture(nil, "ARTWORK")
     frame.icon:SetSize(40, 40); frame.icon:SetPoint("LEFT", 4, 0)
     frame.label = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
@@ -101,8 +104,13 @@ function D:Emit(kind, row, value)
         frame.time:SetText(kind=="hold" and "等待" or timeLabel(value))
         frame:Show(); self:Layout(); self:SetGlow(row.id, kind~="hold")
         if kind=="show" then
-            if NR.db.settings.tts then speak(name..(row.postReady and "好了" or "")) end
-            if NR.db.settings.sound and SOUNDKIT then PlaySound(SOUNDKIT.RAID_WARNING, "Master") end
+            local s,now=NR.db.settings,GetTime()
+            -- The clip marks the moment itself: shown early, it waits for the countdown and plays when time is up.
+            -- Several reminders due together share one sound; a playing clip replaces the spell-name TTS.
+            frame.due=not (value and value>0)
+            if frame.due then self:PlaySound(s.soundChoice) end
+            local quiet=self.voiceUntil and now<self.voiceUntil
+            if s.tts and not quiet then speak(name..(row.postReady and "好了" or "")) end
         end
     elseif kind == "hide" then
         local frame = self.rows[row.id]
@@ -110,19 +118,38 @@ function D:Emit(kind, row, value)
         self:SetGlow(row.id, false)
     elseif kind == "update" then
         local frame = self.rows[row.id]
-        if frame then frame.time:SetText(timeLabel(value)) end
+        if frame then
+            frame.time:SetText(timeLabel(value))
+            if frame.active and not frame.due and value<=0 then frame.due=true; self:PlaySound(NR.db.settings.soundChoice) end
+        end
     elseif kind == "countdown" then
         local now = GetTime()
+        if self.voiceUntil and now < self.voiceUntil then return end
         if self.lastNumber ~= value or not self.lastNumberTime or now - self.lastNumberTime > 0.7 then
             speak(tostring(value)); self.lastNumber, self.lastNumberTime = value, now
         end
     end
 end
 
+-- One sound at a time: reminders shown together share it, and a voice clip quiets TTS until it ends.
+function D:PlaySound(key)
+    local s,now=NR.db.settings,GetTime()
+    if not s.sound or now<(self.soundUntil or 0) then return end
+    local played,handle=NR.Sounds.Play(key)
+    if played then self.soundUntil=now+(played.length or 1); self.voiceUntil=played.voice and self.soundUntil or nil; self.soundHandle=handle end
+end
+
+-- Stop a clip or spoken text that is still playing and forget cached lists.
+function D:Silence()
+    if self.soundHandle and StopSound then StopSound(self.soundHandle) end
+    if C_VoiceChat and C_VoiceChat.StopSpeakingText then C_VoiceChat.StopSpeakingText() end
+    self.soundHandle, self.soundUntil, self.voiceUntil, ttsVoices = nil, nil, nil, nil
+end
+
 function D:Clear()
     for _, frame in pairs(self.rows) do frame.active = false; frame:Hide() end
     for _, record in pairs(self.glows) do record.users = {}; record.overlay:SetAlpha(0) end
-    self.lastNumber, self.lastNumberTime = nil, nil
+    self.lastNumber, self.lastNumberTime, self.soundUntil, self.voiceUntil = nil, nil, nil, nil
     if self.previewMode then
         self.previewMode=false
         local position=NR.db.position

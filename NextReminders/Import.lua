@@ -20,7 +20,7 @@ end
 function NR.ParseNote(text, options)
     options = options or {}
     if type(text) ~= "string" or #text == 0 or #text > 200000 then return nil, "请输入不超过 200 KB 的导出文本" end
-    local plan = { name = "Lorrgs", rows = {}, source = "Lorrgs note", phaseBindings = {} }
+    local plan = { name = "Lorrgs", rows = {}, source = "Lorrgs note", phaseBindings = {}, phaseFallback = {} }
     local seen, headers = {}, 0
     local lineNumber = 0
     local mode
@@ -61,7 +61,7 @@ function NR.ParseNote(text, options)
                 if mode == "NSRT" then return nil, "请勿混用两种导出格式" end
                 local trigger, rest = line:match("^%{time:([^}]+)%}%s*%-%s*(.*)$")
                 if not trigger then return nil, "第 " .. lineNumber .. " 行：无效 MRT 格式" end
-                local minute, second, phase = trigger:match("^(%d+):(%d+%.?%d*),p(%d+)$")
+                local minute, second, phase = trigger:match("^(%d+):(%d+%.?%d*),p(%d+%.?%d*)$")
                 if not minute then minute, second = trigger:match("^(%d+):(%d+%.?%d*)$") end
                 if not minute or tonumber(second) >= 60 then return nil, "第 " .. lineNumber .. " 行：仅支持开打或阶段相对时间" end
                 local tag, spellID = rest:match("^(.-)%s*%{spell:(%d+)%}%s*$")
@@ -75,7 +75,7 @@ function NR.ParseNote(text, options)
             end
             if row then
                 if not NR.Number(row.time, 0, 3600) or not NR.Number(row.spellID, 1, 10000000)
-                    or row.spellID % 1 ~= 0 or not NR.Number(row.phase, 1, 100) or row.phase % 1 ~= 0 then
+                    or row.spellID % 1 ~= 0 or not NR.Phase(row.phase) then
                     return nil, "第 " .. lineNumber .. " 行的技能、阶段或时间无效"
                 end
                 local key = row.phase .. ":" .. row.time .. ":" .. row.spellID .. ":" .. row.tag
@@ -98,20 +98,28 @@ function NR.ParseNote(text, options)
     plan.personal = options.personal ~= false
     plan.format = mode
     table.sort(plan.rows, function(a,b) if a.phase ~= b.phase then return a.phase < b.phase end return a.time < b.time end)
-    -- Import phase IDs describe the source fight. Bind them explicitly to local anchors.
-    for _, row in ipairs(plan.rows) do plan.phaseBindings[row.phase] = row.phase == 1 and "pull" or false end
+    -- Import phase IDs describe the source fight. Bind them explicitly to local anchors; only phases with a
+    -- maintained BigWigs stage mapping start pre-bound, everything else waits for the user.
+    for _, row in ipairs(plan.rows) do
+        plan.phaseBindings[row.phase] = row.phase == 1 and "pull"
+            or NR.Stages.Supports(plan.encounterID, row.phase) and "stage" or false
+    end
     return plan
 end
 
 function NR.ValidatePlan(plan)
     if type(plan) ~= "table" or not NR.Number(plan.encounterID, 1, 1000000) or plan.encounterID % 1 ~= 0
         or not difficultyNames[plan.difficulty] or type(plan.rows) ~= "table" or #plan.rows == 0 or #plan.rows > 500
-        or type(plan.phaseBindings) ~= "table" or (plan.sourceDifficulty ~= nil and not difficultyNames[plan.sourceDifficulty]) then
+        or type(plan.phaseBindings) ~= "table" or (plan.sourceDifficulty ~= nil and not difficultyNames[plan.sourceDifficulty])
+        or (plan.phaseFallback ~= nil and type(plan.phaseFallback) ~= "table") then
         return nil, "方案结构无效，请重新导入"
+    end
+    for phase, seconds in pairs(plan.phaseFallback or {}) do
+        if not NR.Phase(phase) or phase <= 1 or not NR.Number(seconds, 0, 3600) then return nil, "阶段时间无效，请重新填写" end
     end
     local ids = {}
     for _, row in ipairs(plan.rows) do
-        if type(row) ~= "table" or not NR.Number(row.phase, 1, 100) or row.phase % 1 ~= 0
+        if type(row) ~= "table" or not NR.Phase(row.phase)
             or not NR.Number(row.id, 1, 1000000) or row.id % 1 ~= 0 or ids[row.id]
             or not NR.Number(row.time, 0, 3600) or not NR.Number(row.spellID, 1, 10000000) or row.spellID % 1 ~= 0
             or type(row.tag) ~= "string" then return nil, "方案提醒无效，请重新导入" end
@@ -127,9 +135,16 @@ function NR.ValidateBindings(plan)
     for _, row in ipairs(plan.rows) do
         local binding = plan.phaseBindings[row.phase]
         if row.phase == 1 and binding ~= "pull" then return nil, "阶段 1 必须相对开打" end
-        if row.phase > 1 and binding ~= "pull" and (plan.difficulty ~= "mythic" or type(binding) ~= "number"
+        local fallback = plan.phaseFallback and plan.phaseFallback[row.phase]
+        if binding == "stage" then
+            if not NR.Stages.Supports(plan.encounterID, row.phase) then
+                return nil, "阶段 " .. row.phase .. " 没有 BigWigs 阶段对应，请改填转阶段时间"
+            end
+        elseif binding == "time" then
+            if not fallback then return nil, "阶段 " .. row.phase .. " 选了按时间，请填写开打后几秒转阶段" end
+        elseif row.phase > 1 and binding ~= "pull" and (plan.difficulty ~= "mythic" or type(binding) ~= "number"
             or not definition or not definition.anchors[binding]) then
-            return nil, "阶段 " .. row.phase .. " 尚未绑定到游戏识别节点；固定时间可改用 MRT 静态导出"
+            return nil, "阶段 " .. row.phase .. " 尚未绑定；可选 BigWigs 自动或填写转阶段时间"
         end
     end
     return true

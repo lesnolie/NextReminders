@@ -255,6 +255,30 @@ function P.New(specID, encounterID, difficulty)
     return p
 end
 
+local function known(entry)
+    local probe=C_SpellBook and C_SpellBook.IsSpellKnown or IsPlayerSpell
+    if type(probe)=="function" then
+        local ok,value=pcall(probe,entry.id)
+        if ok and NR.Public(value) and type(value)=="boolean" then return value end
+    end
+    return not entry.talent
+end
+
+-- Built-in fallback for M+ bosses the user never configured: this spec's main burst spells at the pull,
+-- then again every time they come off cooldown after being used. Never saved, rebuilt each pull.
+function P.Default(specID, encounterID)
+    if not integer(specID,1,10000) or not integer(encounterID,1,1000000) then return end
+    local p={kind="events",auto=true,specID=specID,encounterID=encounterID,difficulty="mythic",enabled=true,rows={},dataVersion=P.dataVersion}
+    for _,entry in ipairs(NR.SpellCatalog.ForSpec(specID)) do
+        local primary=false
+        for _,id in ipairs(entry.primarySpecs) do if id==specID then primary=true end end
+        if primary and known(entry) and #p.rows<100 then
+            p.rows[#p.rows+1]={id=#p.rows+1,spellID=entry.id,anchor="start",occurrence=1,time=0,window=10,after="ready",auto=true}
+        end
+    end
+    if #p.rows>0 and P.Validate(p) then return p end
+end
+
 function P.Find(specID, encounterID, difficulty)
     if not integer(specID,1,10000) or not integer(encounterID,1,1000000) or type(difficulty)~="string" then return end
     local specs=NR.db and NR.db.eventPlans

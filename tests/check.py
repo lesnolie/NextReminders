@@ -96,8 +96,8 @@ def runtime(all_files=False):
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(MOCK)
     nr = lua.table()
-    names = ["Core.lua", "SpellCatalog.lua", "Theme.lua", "BossData.lua", "DungeonData.lua", "Import.lua", "EventPlans.lua", "BossEvents.lua", "Ready.lua", "Engine.lua", "Preview.lua"]
-    if all_files: names += ["Display.lua", "PreviewUI.lua", "UI.lua", "Main.lua"]
+    names = ["Core.lua", "SpellCatalog.lua", "Theme.lua", "BossRules.lua", "BossData.lua", "DungeonData.lua", "Import.lua", "EventPlans.lua", "TimelinePlans.lua", "BossEvents.lua", "Ready.lua", "Engine.lua", "Preview.lua"]
+    if all_files: names += ["Sounds.lua", "Display.lua", "PreviewUI.lua", "UI.lua", "Main.lua"]
     for name in names:
         chunk = lua.execute("return assert(loadstring(...))",(ADDON/name).read_text(encoding="utf-8"))
         chunk("NextReminders",nr)
@@ -124,7 +124,7 @@ editor:SetText('中文及长行\nEncounterID:3492;Difficulty:Heroic;\nph:1;time:
 editor.scripts.OnTextChanged(editor);assert(not caret:IsShown(),'do not guess a nonempty cursor position')
 editor.scripts.OnCursorChanged(editor,97,-600,1,18)
 assert(caret:IsShown() and caret.point[4]==97 and caret.point[5]==-600 and caret:GetHeight()==18)
-assert(editor.parent:GetVerticalScroll()==367)
+assert(editor.parent:GetVerticalScroll()==362)
 editor.scripts.OnCursorChanged(editor,115,-600,1,18)
 editor:SetText(editor:GetText()..'更多中文');editor.scripts.OnTextChanged(editor)
 assert(caret:IsShown() and caret.point[4]==115,'native cursor-before-text callbacks must keep the real insertion position')
@@ -188,6 +188,63 @@ e:Begin(3101,'mythic',nil,{lead=5},0,{specID=specID},p);assert(show==1)
 e:Cast(spellID,1);assert(hide==1 and e.rows[1].done and e.readyWatches[e.rows[1].id])
 ''')
 
+    def test_sound_pack_is_only_our_voice_clips_with_light_dropdown(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r'''
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local files,kits={},{}
+PlaySoundFile=function(path)files[#files+1]=path;return true end
+PlaySound=function(id)kits[#kits+1]=id end
+LibStub=function()return {List=function()return {'Other'} end,Fetch=function()return 'x.ogg' end} end
+local s=NR.Settings({sound=true,soundChoice=('x'):rep(201)})
+assert(s.soundChoice=='meow' and s.soundFile==nil)
+local d=NR.Settings({});assert(d.soundChoice=='meow' and d.readySound==nil and d.missSound==nil)
+assert(NR.Sounds.Find('kit:READY_CHECK','meow').key=='meow','old client-sound choices fall back to the default clip')
+assert(NR.Sounds.Play('kit:READY_CHECK')==nil and NR.Sounds.Play('off')==nil and #files==0 and #kits==0,'unknown or off plays nothing')
+-- Only "off" plus the ten bundled clips: no client sounds, no LibSharedMedia, no custom file.
+local list=NR.Sounds.List();assert(list[1].key=='off' and #list==11)
+for i=2,#list do local e=list[i];assert(e.file and e.voice and e.length>0)
+ local f=io.open('NextReminders/Media/'..e.file:match('([%w_]+%.ogg)$'),'rb');assert(f,e.file);f:close() end
+-- Reminder: one voice clip for reminders shown together; it replaces the spell-name TTS and the countdown while it plays.
+NR.db.settings=NR.Settings({sound=true,tts=true})
+now=100;local before=#voiceCalls
+-- Shown early: spell names are spoken, then 3, 2, 1, and the clip plays when time is up (once for both rows).
+NR.Display:Emit('show',{id=1,spellID=42650,target=105},5);NR.Display:Emit('show',{id=2,spellID=1233448,target=105},5)
+assert(#files==0 and #voiceCalls==before+2,'clip waits for the moment')
+now=102;NR.Display:Emit('countdown',{id=1},3);now=103;NR.Display:Emit('countdown',{id=1},2);now=104;NR.Display:Emit('countdown',{id=1},1)
+assert(voiceCalls[#voiceCalls]=='1' and #files==0)
+now=104.5;NR.Display:Emit('update',{id=1},0.5);assert(#files==0)
+now=105;NR.Display:Emit('update',{id=1},0);NR.Display:Emit('update',{id=2},0)
+assert(#files==1 and files[1]:find('burst_meow.ogg',1,true),'one clip at time-up')
+NR.Display:Emit('update',{id=1},-1);assert(#files==1,'played once per reminder')
+-- A countdown number while a clip still plays waits for it.
+now=105.5;before=#voiceCalls;NR.Display:Emit('countdown',{id=1},3);assert(#voiceCalls==before)
+-- Ready again uses the same reminder sound.
+NR.Display:Clear();now=110;NR.Display:Emit('show',{id=5,spellID=42650,target=110,postReady=true},0);assert(files[#files]:find('burst_meow.ogg',1,true))
+-- An unused reminder that expires plays nothing more.
+local e=NR.Engine.New(function(kind,row,value)NR.Display:Emit(kind,row,value)end)
+NR.Display:Clear();NR.db.settings=NR.Settings({sound=true});local n=#files
+now=0;e:Begin(3101,'mythic',nil,{lead=5,window=10},0,{specID=252},NR.EventPlans.New(252,3101))
+now=0;e:Tick(0);now=11;NR.Display.soundUntil=nil;e:Tick(11);assert(#files==n+1,'expiry is silent')
+-- A clip the client refuses: TTS still speaks.
+NR.Display:Clear();PlaySoundFile=function()return false end
+NR.db.settings=NR.Settings({sound=true,tts=true,soundChoice='rita_ready'})
+now=300;before=#voiceCalls;NR.Display:Emit('show',{id=4,spellID=42650,target=300},0);assert(#voiceCalls==before+1)
+PlaySoundFile=function(path)files[#files+1]=path;return true end
+-- The picker opens the addon's own light list: one row per clip, current one marked; a pick selects, previews and closes.
+local ui=NR.UI;ui:SetPage('settings');ui:Refresh()
+local pick=ui.soundPicks.soundChoice;assert(ui.soundValues.soundChoice=='rita_ready' and pick:GetText():find('丽塔',1,true))
+pick.scripts.OnClick(pick);local menu=NR.Theme.menuFrame
+assert(menu.shown and menu.height==11*28+12)
+local shown=0;for _,row in ipairs(menu.rows)do if row.shown then shown=shown+1 end end;assert(shown==11)
+assert(menu.rows[9].mark.shown and not menu.rows[2].mark.shown,'current clip is marked')
+menu.rows[3].scripts.OnClick(menu.rows[3])
+assert(not menu.shown and ui.soundValues.soundChoice=='lyl_fire_1' and files[#files]:find('lyl_fire_1.ogg',1,true) and pick:GetText():find('开炮',1,true))
+pick.scripts.OnClick(pick);assert(menu.shown);pick.scripts.OnClick(pick);assert(not menu.shown,'clicking the field again closes it')
+ui:SaveSettings();assert(NR.db.settings.soundChoice=='lyl_fire_1' and NR.db.settings.soundFile==nil)
+LibStub=nil
+''')
+
     def test_catalog_public_native_metadata_fallback_and_plugin_command(self):
         lua,nr=runtime(True);lua.globals().NR=nr
         lua.execute(r'''
@@ -221,12 +278,12 @@ assert(ui.noteHint:IsShown() and ui.noteFocus:GetText()=='点击输入')
 ui.notePanel.scripts.OnMouseDown(ui.notePanel,'RightButton');assert(not editor:HasFocus())
 ui.notePanel.scripts.OnMouseDown(ui.notePanel,'LeftButton')
 assert(editor:HasFocus() and ui.noteFocus:GetText()=='正在输入' and not ui.noteHint:IsShown())
-assert(ui.notePanel.backdropBorderColor[1]==NR.Theme.colors.accent[1])
+assert(ui.notePanel.borderColor==NR.Theme.colors.ink)
 editor.scripts.OnCursorChanged(editor,4,-600,1,16)
-assert(scroll:GetVerticalScroll()==365 and editor:GetHeight()>=624,'caret must stay in the visible scroll area')
+assert(scroll:GetVerticalScroll()==360 and editor:GetHeight()>=624,'caret must stay in the visible scroll area')
 editor.scripts.OnCursorChanged(editor,4,0,1,16);assert(scroll:GetVerticalScroll()==0)
 ui.encounter:SetFocus();assert(not editor:HasFocus() and ui.noteFocus:GetText()=='点击输入')
-assert(ui.notePanel.backdropBorderColor[1]==NR.Theme.colors.border[1])
+assert(ui.notePanel.borderColor==NR.Theme.colors.border)
 scroll.scripts.OnMouseDown(scroll,'LeftButton');assert(editor:HasFocus())
 editor:SetText('EncounterID:3492;Difficulty:Heroic;\nph:1;time:10;spellid:51271;')
 editor.scripts.OnTextChanged(editor);ui:Parse();local parsed=ui.preview;assert(parsed)
@@ -355,7 +412,8 @@ driver.scripts.OnEvent(driver,'ENCOUNTER_START',3101,'',8);assert(not NR.preview
 driver.scripts.OnEvent(driver,'ENCOUNTER_END')
 driver.scripts.OnEvent(driver,'ENCOUNTER_START',3105,'',8);assert(#NR.engine.rows==1 and NR.engine.rows[1].spellID==42650)
 driver.scripts.OnEvent(driver,'ENCOUNTER_END')
-driver.scripts.OnEvent(driver,'ENCOUNTER_START',3102,'',8);assert(#NR.engine.rows==0,'omitted boss must not fall back to legacy static notes')
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',3102,'',8);assert(#NR.engine.rows>0,'omitted boss uses built-in burst reminders')
+for _,row in ipairs(NR.engine.rows) do assert(row.auto,'omitted boss must not fall back to legacy static notes') end
 driver.scripts.OnEvent(driver,'ENCOUNTER_END')
 driver.scripts.OnEvent(driver,'ENCOUNTER_START',3105,'',23);assert(#NR.engine.rows==0,'M+ bundle must not run in ordinary mythic')
 driver.scripts.OnEvent(driver,'ENCOUNTER_END')
@@ -498,6 +556,14 @@ now=250;driver.scripts.OnEvent(driver,'ENCOUNTER_WARNING',{severity=1})
 now=252;driver.scripts.OnEvent(driver,'UNIT_SPELLCAST_SUCCEEDED','player','',42650)
 assert(next(NR.engine.readyWatches));driver.scripts.OnEvent(driver,'PLAYER_ENTERING_WORLD')
 assert(not NR.engine.active and not next(NR.engine.readyWatches))
+-- Pressed long after the reminder expired: the first use still starts ready reminders.
+now=300;driver.scripts.OnEvent(driver,'ENCOUNTER_START',3101,'',8)
+now=330;driver.scripts.OnEvent(driver,'ENCOUNTER_WARNING',{severity=1})
+NR.engine:Tick(360);assert(NR.engine.rows[2].done and not NR.engine.rows[2].used,'vulnerability reminder expired unused')
+now=400;driver.scripts.OnEvent(driver,'UNIT_SPELLCAST_SUCCEEDED','player','',42650)
+assert(NR.engine.readyWatches['event:2'],'late first use unlocks ready reminders')
+cd[42650]='cooling';NR.engine:CooldownUpdate(401);NR.engine:Tick(401);before=#voiceCalls;cd[42650]='ready';NR.engine:Tick(500)
+assert(#voiceCalls==before+1,'late first use still voices the next ready')
 ''')
 
     def test_ready_public_flags_secrets_gcd_charges_and_disabled_cases(self):
@@ -847,7 +913,7 @@ local multi="EncounterID:9999;Difficulty:Heroic;\n"
 for i=2,10 do multi=multi.."ph:"..i..";time:3;spellid:51271;\n" end
 NR.UI.note:SetText(multi); NR.UI:Parse(); NR.UI:Play()
 assert(NR.preview.running and #NR.preview.engine.rows==9)
-assert(#NR.UI.binders==9 and NR.UI.bindingContent:GetHeight()==306)
+assert(#NR.UI.binders==9 and NR.UI.bindingContent:GetHeight()==360)
 NR.UI:Save(); assert(not NR.db.plans["9999:heroic"])
 ''')
 
@@ -1181,10 +1247,11 @@ assert(plan.rows[2].time==90.3 and NR.ValidateBindings(plan))
         lua.execute(r'''
 created[1].scripts.OnEvent(created[1],"ADDON_LOADED","NextReminders")
 NR.UI.frame:Show(); NR.UI:SetPage("settings")
-local covered={}
+local covered,surfaces={},0
 for _,panel in ipairs(created) do
  local p=panel.point
- if panel.template=="BackdropTemplate" and panel.parent and p and p[1]=="TOPLEFT" and type(p[2])=="number" then
+ if rawget(panel,"isSurface") then surfaces=surfaces+1 end
+ if rawget(panel,"isSurface") and panel.parent and p and p[1]=="TOPLEFT" and type(p[2])=="number" then
   for _,text in ipairs(fontStrings) do
    local q=text.point
    if text.owner==panel.parent and q and q[1]=="TOPLEFT" and type(q[2])=="number"
@@ -1195,9 +1262,163 @@ for _,panel in ipairs(created) do
  end
 end
 assert(#covered==0,"text under a panel: "..table.concat(covered," | "))
+assert(surfaces>=12,"the cards are checked")
 assert(NR.UI.message.text:find("保存设置"),"settings page shows its own hint")
 NR.UI:SetPage("import"); assert(NR.UI.message.text:find("Lorrgs"))
 ''')
+
+
+    def test_preview_timeline_click_seeks_and_reminder_bar_stays_see_through(self):
+        lua,nr=runtime(True); lua.globals().NR=nr
+        lua.execute(r'''
+local driver=created[1];driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
+local plan=NR.ParseNote("EncounterID:3492;Difficulty:Heroic;\nph:1;time:5;spellid:51271;\nph:1;time:100;spellid:47568;")
+now=0;local ok,err=NR.PreviewUI:Open(plan);assert(ok,tostring(err));NR.preview:Stop();NR.PreviewUI.lastUpdate=nil;NR.PreviewUI:Update()
+local tl=NR.PreviewUI.timeline;assert(NR.PreviewUI.span==60,tostring(NR.PreviewUI.span))
+tl.GetLeft=function()return 100 end;tl.GetEffectiveScale=function()return 1 end
+GetCursorPosition=function()return 100+24+944/2,0 end
+tl.scripts.OnMouseDown(tl,"LeftButton")
+assert(NR.preview.running and math.abs(NR.preview.position-30)<0.1,tostring(NR.preview.running)..' '..tostring(NR.preview.position)..' '..tostring(NR.PreviewUI.message:GetText()))
+local row=NR.Display:Row(99);assert(row.backdropColor[4]<=0.2 and not rawget(row,"nrFill"),'reminder bar keeps the old see-through look')
+''')
+
+    def test_cleanup_on_close_and_fight_end_waits_for_combat_and_stops_voice(self):
+        lua,nr=runtime(True); lua.globals().NR=nr
+        lua.execute(r'''
+local collected,stopped,mem=0,{},300
+collectgarbage=function(what) if what=="collect" then collected=collected+1;mem=120 end return 0 end
+UpdateAddOnMemoryUsage=function() end
+GetAddOnMemoryUsage=function(name) assert(name=="NextReminders");return mem end
+StopSound=function(h) stopped[#stopped+1]=h end
+PlaySoundFile=function() return true,77 end
+C_VoiceChat.StopSpeakingText=function() stopped[#stopped+1]="tts" end
+local driver=created[1];driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
+NR.db.settings=NR.Settings({sound=true})
+now=10;NR.Display:Emit("show",{id=1,spellID=42650,target=10},0)
+-- Closing the window stops the clip that is still playing and collects garbage.
+NR.UI.frame:Show();NR.UI.frame:Hide()
+assert(collected==1 and stopped[1]==77 and stopped[2]=="tts" and NR.lastCleanup=="close")
+assert(not NR.Display.rows[1]:IsShown())
+-- In combat it waits, then runs once combat ends.
+combat=true;local ok,err=NR.Cleanup("manual");assert(not ok and err:find("脱战") and collected==1)
+combat=false;driver.scripts.OnEvent(driver,"PLAYER_REGEN_ENABLED");assert(collected==2 and not NR.cleanupPending)
+-- Fight end: cleaned when it is already out of combat; a rehearsal in progress is left alone.
+driver.scripts.OnEvent(driver,"ENCOUNTER_END");assert(collected==3 and NR.lastCleanup=="encounter")
+NR.preview.running=true;assert(not NR.Cleanup("manual") and collected==3);NR.preview.running=false
+-- Settings card button shows before and after.
+mem=300;NR.UI.frame:Show();NR.UI:SetPage("settings");NR.UI.cleanButton.scripts.OnClick()
+assert(NR.UI.memoryLabel:GetText()=="300 KB → 120 KB",NR.UI.memoryLabel:GetText())
+SlashCmdList.NEXTREMINDERS("gc");assert(messages[#messages]:find("KB"))
+''')
+
+    def test_fractional_lorrgs_phases_and_bigwigs_stage_bindings(self):
+        lua,nr=runtime(); lua.globals().NR=nr
+        lua.execute(r"""
+assert(NR.Phase(1.5) and NR.Phase(1.75) and NR.Phase(2) and not NR.Phase(1.333) and not NR.Phase(0.5))
+assert(NR.ParseClock("2:15")==135 and NR.ParseClock("135.5")==135.5 and not NR.ParseClock("2:75") and not NR.ParseClock("m:ss"))
+assert(NR.Stages.Supports(3492,2) and NR.Stages.Supports(3492,2.5) and NR.Stages.Supports(3492,3))
+assert(NR.Stages.Supports(3513,2) and not NR.Stages.Supports(3513,2.5))
+local note="EncounterID:3470;Difficulty:Mythic;Name:Nekzali;\nph:1;time:10;tag:everyone;spellid:51271;\nph:1.5;time:3;tag:everyone;spellid:152279;\nph:1.75;time:4;tag:everyone;spellid:51271;\nph:2;time:5;tag:everyone;spellid:152279;"
+local p,e=NR.ParseNote(note); assert(p,e)
+assert(p.phaseBindings[1]=="pull" and p.phaseBindings[1.5]=="stage" and p.phaseBindings[2]=="stage" and p.phaseBindings[1.75]==false)
+assert(not NR.ValidateBindings(p))
+p.phaseBindings[1.75]="time"; assert(not NR.ValidateBindings(p))
+p.phaseFallback[1.75]=100; assert(NR.ValidateBindings(p))
+p.phaseBindings[1.75]="stage"; assert(not NR.ValidateBindings(p), "1.75 has no BigWigs stage")
+p.phaseBindings[1.75]="time"
+p.phaseFallback[1.333]=5; assert(not NR.ValidateBindings(p)); p.phaseFallback[1.333]=nil
+local mp=NR.ParseNote("{time:00:03,p2.5} - X {spell:51271}",{encounterID=3429})
+assert(mp and mp.rows[1].phase==2.5 and mp.phaseBindings[2.5]=="stage")
+assert(not NR.ParseNote("EncounterID:3470;Difficulty:Mythic;\nph:1.333;time:1;spellid:51271;"))
+local heroic=NR.ParseNote(note,{targetDifficulty="heroic"}); heroic.phaseFallback[1.75]=100; heroic.phaseBindings[1.75]="time"
+assert(NR.ValidateBindings(heroic), "BigWigs bindings work on every difficulty")
+-- Live: BigWigs present, stages anchor source phases and retire earlier ones.
+p.enabled=true
+local e=NR.Engine.New(function() end); e:Begin(3470,"mythic",p,{lead=5,window=10},0,{})
+e:Stage(1,0); assert(e.stageReady)
+e:Tick(60); assert(not e.rows[2].target and e.rows[3].target==104)
+e:Stage(1.5,80); assert(e.rows[2].target==83 and e.rows[2].shown)
+e:Stage(2,90); assert(e.rows[4].target==95 and e.rows[3].done and not e.rows[3].shown)
+e:Stage(2,95); assert(e.anchorTimes["stage:2"]==90)
+-- No BigWigs: stage rows use the entered transition times after a 5 s grace.
+p.phaseFallback[1.5]=70; p.phaseFallback[2]=120
+local f=NR.Engine.New(function() end); f:Begin(3470,"mythic",p,{lead=5,window=10},0,{})
+f:Tick(1); assert(not f.rows[2].target)
+f:Tick(6); assert(f.rows[2].target==73 and f.rows[4].target==125)
+-- Order-mapped boss counts every BigWigs change.
+local o=NR.ParseNote("EncounterID:3497;Difficulty:Heroic;\nph:2;time:1;tag:everyone;spellid:51271;\nph:3;time:1;tag:everyone;spellid:51271;")
+o.enabled=true; assert(o.phaseBindings[2]=="stage" and NR.ValidateBindings(o))
+local g=NR.Engine.New(function() end); g:Begin(3497,"heroic",o,{},0,{})
+g:Stage(1,0); g:Stage(3,30); g:Stage(1,60)
+assert(g.rows[1].target==31 and g.rows[2].target==61)
+""")
+
+    def test_bigwigs_messages_drive_saved_plan_and_ui_time_box(self):
+        lua,nr=runtime(True); lua.globals().NR=nr
+        lua.execute(r"""
+local handlers={}
+BigWigsLoader={RegisterMessage=function(owner,message,fn) assert(owner~=BigWigsLoader); handlers[message]=fn end}
+local driver=created[1]
+driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
+assert(handlers.BigWigs_SetStage and handlers.BigWigs_OnBossEngage)
+NR.UI.note:SetText("EncounterID:3470;Difficulty:Mythic;\nph:1.5;time:3;tag:everyone;spellid:51271;\nph:1.75;time:2;tag:everyone;spellid:152279;")
+NR.UI:Parse()
+assert(NR.UI.binders[1]:GetText():find("BigWigs") and NR.UI.binders[2]:GetText():find("未绑定"))
+NR.UI:Save(); assert(not NR.db.plans["3470:mythic"], "unbound 1.75 must block save")
+local box=NR.UI.fallbacks[2]; box:SetText("1:40"); box.scripts.OnTextChanged(box)
+assert(NR.UI.preview.phaseBindings[1.75]=="time" and NR.UI.preview.phaseFallback[1.75]==100)
+NR.UI:Save(); assert(NR.db.plans["3470:mythic"].phaseFallback[1.75]==100)
+local module={GetEncounterID=function() return 3470 end}
+local other={GetEncounterID=function() return 9999 end}
+now=10; driver.scripts.OnEvent(driver,"ENCOUNTER_START",3470,"Nekzali",16)
+handlers.BigWigs_OnBossEngage("BigWigs_OnBossEngage",module); assert(NR.engine.stageReady)
+handlers.BigWigs_SetStage("BigWigs_SetStage",other,1.5); assert(not NR.engine.anchorTimes["stage:1.5"])
+now=50; handlers.BigWigs_SetStage("BigWigs_SetStage",module,1.5); assert(NR.engine.anchorTimes["stage:1.5"]==50)
+assert(NR.engine.rows[1].shown and NR.engine.rows[1].target==53)
+assert(NR.engine.rows[2].target==112)
+driver.scripts.OnEvent(driver,"ENCOUNTER_END")
+NR.UI:Parse(); assert(NR.UI.fallbacks[2]:GetText()=="m:ss")
+""")
+
+
+    def test_unconfigured_mplus_boss_uses_builtin_burst_ready_reminders(self):
+        lua,nr=runtime(True); lua.globals().NR=nr
+        lua.execute(r"""
+local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+assert(NR.db.settings.autoBurst==nil or NR.Settings(NR.db.settings).autoBurst)
+local cd={}
+C_Spell.GetSpellCooldown=function(id) return {isEnabled=true,isActive=cd[id]=='cooling',isOnGCD=false} end
+local d=NR.EventPlans.Default(251,9999); assert(d and #d.rows>0 and d.auto)
+local spell=d.rows[1].spellID
+for _,row in ipairs(d.rows) do
+ local entry=NR.SpellCatalog.Get(row.spellID); local primary=false
+ for _,id in ipairs(entry.primarySpecs) do primary=primary or id==251 end
+ assert(primary and row.anchor=='start' and row.after=='ready')
+end
+now=0;driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',8)
+assert(NR.engine.rows[1] and NR.engine.rows[1].auto and NR.engine.rows[1].shown, 'pull reminder')
+now=20;NR.engine:Tick(20);assert(NR.engine.rows[1].done,'pull reminder expires unused')
+now=40;driver.scripts.OnEvent(driver,'UNIT_SPELLCAST_SUCCEEDED','player','',spell)
+assert(NR.engine.readyWatches[NR.engine.rows[1].id],'late first use still starts ready reminders')
+cd[spell]='cooling';driver.scripts.OnEvent(driver,'SPELL_UPDATE_COOLDOWN');now=41;NR.engine:Tick(41)
+local before=#voiceCalls
+cd[spell]='ready';now=100;NR.engine:Tick(100)
+assert(NR.engine.rows[1].shown and #voiceCalls==before+1,'reminded when ready again')
+driver.scripts.OnEvent(driver,'ENCOUNTER_END')
+-- Raid difficulty, disabled setting, or a configured plan do not use the fallback.
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',16); assert(#NR.engine.rows==0)
+driver.scripts.OnEvent(driver,'ENCOUNTER_END')
+NR.db.settings.autoBurst=false
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',8); assert(#NR.engine.rows==0)
+driver.scripts.OnEvent(driver,'ENCOUNTER_END'); NR.db.settings.autoBurst=true
+local own=NR.EventPlans.New(251,9999); own.rows={{id=1,spellID=51271,anchor='start',occurrence=1,time=5,window=10}}
+assert(NR.EventPlans.Save(own))
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',8)
+assert(#NR.engine.rows==1 and not NR.engine.rows[1].auto,'configured boss uses the user plan')
+driver.scripts.OnEvent(driver,'ENCOUNTER_END')
+NR.UI:Refresh(); NR.UI:SetPage('settings'); NR.UI.checks.autoBurst:SetChecked(false); NR.UI:SaveSettings()
+assert(NR.db.settings.autoBurst==false)
+""")
 
 
 if __name__=="__main__":

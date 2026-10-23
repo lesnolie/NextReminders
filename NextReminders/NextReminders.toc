@@ -2,20 +2,25 @@
 ## Title: NextReminders
 ## Notes: Lorrgs personal reminders and public encounter timeline phase detection.
 ## Author: Leslie
-## Version: 0.3.5-dev
+## IconTexture: Interface\AddOns\NextReminders\Media\ui_logo
+## Version: 0.3.6-dev
 ## SavedVariables: NextRemindersDB
+## OptionalDeps: BigWigs
 
 Core.lua
 SpellCatalog.lua
 Theme.lua
+BossRules.lua
 BossData.lua
 DungeonData.lua
 Import.lua
 EventPlans.lua
+TimelinePlans.lua
 BossEvents.lua
 Ready.lua
 Engine.lua
 Preview.lua
+Sounds.lua
 Display.lua
 PreviewUI.lua
 UI.lua
