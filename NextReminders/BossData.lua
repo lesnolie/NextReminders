@@ -29,7 +29,7 @@ NR.BossData = { schema = 1, dataVersion = "2026.10.23.2", encounters = {
 -- Public signal candidates are independently maintained and difficulty-scoped.
 -- Labels describe the intended mechanism; these mappings still require our own LIVE validation.
 NR.BossData.encounters[3101].events={mythic={
-    vuln={label="易伤生效",warning={severity=1},delay=1.7,guard=10,maxCount=4},
+    vuln={label="易伤生效",warning={severity=1},bigWigsMessage=1230304,signalSource="游戏预警／LittleWigs",delay=1.7,guard=10,maxCount=4},
 }}
 NR.BossData.encounters[3105].events={mythic={
     dog={label="第一次放狗",bar={duration=10,batch={15,10,24}},guard=5,maxCount=1},
@@ -40,6 +40,14 @@ NR.BossData.encounters[3457].events={mythic={
 NR.BossData.encounters[2125].events={mythic={
     snakes={label="召蛇（证据弱）",bar={duration=13,batch={13,36,5,25,44,49}},guard=5,maxCount=1},
 }}
+
+-- Rehearsal ONLY: same reference positions as tellmenext-web/web/timeline.mjs.
+-- CoolPlan 2026-10-21 snapshot: 3101 Illicit Infusion 111.5 - 20 = 91.5;
+-- 3105 first Summon Vilefiend = 12.8. Never used by the live event detector.
+NR.BossData.previewEvents = {
+    [3101] = {mythic={vuln={91.5}}},
+    [3105] = {mythic={dog={12.8}}},
+}
 
 -- Lorrgs NSRT phase -> BigWigs stage (BigWigs_SetStage), any difficulty. Derived 2026-10-21 by reading the
 -- Lorrgs backend phase rules and the BigWigs 12.1 modules; second offsets vs WCL and LIVE are still unverified.

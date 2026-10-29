@@ -1,6 +1,6 @@
 local _, NR = ...
 _G.NextReminders = NR
-NR.version = "0.3.6-dev"
+NR.version = "0.3.12-dev"
 NR.defaults = { lead = 5, window = 10, hideOnUse = true, tts = true,
     countdown = true, sound = false, soundChoice = "meow", glow = "", volume = 80, scale = 1, autoBurst = true }
 
@@ -61,4 +61,13 @@ function NR.Settings(input)
     if type(input.soundChoice) == "string" and #input.soundChoice <= 200 then result.soundChoice = input.soundChoice end
     if NR.Number(input.voice, 0, 100000) then result.voice = input.voice end
     return result
+end
+
+-- The client's name for a specialization; "专精 <id>" when the client cannot say.
+function NR.SpecName(specID)
+    if GetSpecializationInfoByID and NR.Number(specID, 1, 10000) then
+        local ok, _, name = pcall(GetSpecializationInfoByID, specID)
+        if ok and NR.Public(name) and type(name) == "string" and name ~= "" then return name end
+    end
+    return "专精 " .. tostring(specID)
 end

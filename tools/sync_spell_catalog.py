@@ -7,7 +7,7 @@ import re
 ROOT=Path(__file__).resolve().parents[1]
 
 def outputs():
-    data=json.loads((ROOT/'web/burst-spells.json').read_text(encoding='utf-8'))
+    data=json.loads((ROOT/'data/burst-spells.json').read_text(encoding='utf-8'))
     specs={s['id'] for s in data['specs']}
     if data['schema']!=1 or len(specs)!=40:raise ValueError('Expected the 40-spec schema-1 catalog')
     seen=set()
@@ -15,7 +15,7 @@ def outputs():
         if type(row['id']) is not int or not 0<row['id']<=10000000 or row['id'] in seen:raise ValueError('Invalid or duplicate spell ID')
         if not row['name'] or not re.fullmatch(r'[a-z0-9_-]+',row['icon']) or not row['specs'] or not set(row['specs'])<=specs:raise ValueError('Invalid spell metadata/scope')
         if not set(row['primarySpecs'])<=set(row['specs']) or type(row['talent']) is not bool:raise ValueError('Invalid primary/talent metadata')
-        if row['image']!=f"assets/spells/{row['id']}.webp" or not (ROOT/'web'/row['image']).is_file():raise ValueError('Missing local spell image')
+        if row['image']!=f"assets/spells/{row['id']}.webp":raise ValueError('Invalid spell image reference')
         seen.add(row['id'])
     if any(not any(s in r['specs'] for r in data['spells']) for s in specs):raise ValueError('Missing specialization')
     browser={k:data[k] for k in ('schema','dataVersion','gameVersion','specs','spells')}
@@ -33,7 +33,7 @@ def outputs():
         'function C.Get(spellID)','    if not NR.Number(spellID,1,10000000) or spellID%1~=0 then return nil end','    return byID[spellID] and NR.Copy(byID[spellID]) or nil','end','',
         'function C.ForSpec(specID)','    local out = {}','    if not NR.Number(specID,1,10000) or specID%1~=0 then return out end','    for _, entry in ipairs(C.spells) do','        for _, id in ipairs(entry.specs) do','            if id==specID then out[#out+1]=NR.Copy(entry); break end','        end','    end','    return out','end','',
         'function C.Info(spellID)','    if not NR.Number(spellID,1,10000000) or spellID%1~=0 then return "提醒",nil end','    local entry=byID[spellID]','    local info','    if C_Spell and C_Spell.GetSpellInfo then','        local ok,value=pcall(C_Spell.GetSpellInfo,spellID)','        if ok and NR.Public(value) and type(value)=="table" then info=value end','    end','    local name=info and info.name','    if not NR.Public(name) or type(name)~="string" or name=="" then name=entry and entry.name or "技能 "..spellID end','    local icon=info and info.iconID','    if not NR.Number(icon,1,100000000) then icon=entry and entry.icon or nil end','    return name,icon','end','']
-    return {ROOT/'web/spells.mjs':js,ROOT/'NextReminders/SpellCatalog.lua':'\n'.join(lua)}
+    return {ROOT/'tests/fixtures/protocol/spells.mjs':js,ROOT/'NextReminders/SpellCatalog.lua':'\n'.join(lua)}
 
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--check',action='store_true');args=parser.parse_args()

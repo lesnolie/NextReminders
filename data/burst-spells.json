@@ -1,0 +1,2910 @@
+{
+  "schema": 1,
+  "dataVersion": "2026.10.28.1",
+  "gameVersion": "12.1.0.69933",
+  "updatedAt": "2026-10-28",
+  "scope": "40 specs, common active burst and healer/tank major cooldowns; curated primary defaults; no fixed timings or automatic rotations",
+  "sources": {
+    "game-12.1.0.69933": {
+      "kind": "local game data artifact",
+      "path": "C:\\work\\TMN\\TMN\\resources\\wow_spell_icons_by_spec",
+      "indexSha256": "688516afd99555d2139df4bdae01ffc1e1d1ecd5ae677ac9891095e1e09a5c07",
+      "version": "12.1.0.69933"
+    },
+    "coolplan": {
+      "url": "https://coolplan.team/spec-benchmark/DeathKnight/Frost?dungeon=murder-row",
+      "assetURL": "https://coolplan.team/_next/static/chunks/7597-4806b1d5056ccdcb.js",
+      "sha256": "9bf7025f35e786a51a1e8541ad4899fb5bc826306086d07836ffbd1b2c7c831f",
+      "upstreamVerificationPending": true,
+      "use": "candidate selection only; checked against game artifact"
+    },
+    "wowhead-zhCN": {
+      "urlTemplate": "https://nether.wowhead.com/tooltip/spell/{id}?dataEnv=1&locale=4",
+      "use": "localized name and native texture metadata"
+    },
+    "simc-apl-fa7a6dc": {
+      "commit": "fa7a6dc693fee5d478addb9df97e479153567fa1",
+      "use": "local action-bar library recommended.json evidence"
+    },
+    "lorrgs-20261028": {
+      "url": "https://lorrgs.io",
+      "use": "40 specialization pages and public spell-event catalogs reviewed; primary selection is curated, not copied from show flags; cast/action IDs cross-checked with local game artifact",
+      "review": "docs/research/BURST_DEFAULTS_20261028.md"
+    }
+  },
+  "specs": [
+    {
+      "id": 250,
+      "className": "DeathKnight",
+      "classLabel": "死亡骑士",
+      "specName": "Blood",
+      "label": "鲜血"
+    },
+    {
+      "id": 251,
+      "className": "DeathKnight",
+      "classLabel": "死亡骑士",
+      "specName": "Frost",
+      "label": "冰霜"
+    },
+    {
+      "id": 252,
+      "className": "DeathKnight",
+      "classLabel": "死亡骑士",
+      "specName": "Unholy",
+      "label": "邪恶"
+    },
+    {
+      "id": 577,
+      "className": "DemonHunter",
+      "classLabel": "恶魔猎手",
+      "specName": "Havoc",
+      "label": "浩劫"
+    },
+    {
+      "id": 581,
+      "className": "DemonHunter",
+      "classLabel": "恶魔猎手",
+      "specName": "Vengeance",
+      "label": "复仇"
+    },
+    {
+      "id": 1480,
+      "className": "DemonHunter",
+      "classLabel": "恶魔猎手",
+      "specName": "Devourer",
+      "label": "Devourer"
+    },
+    {
+      "id": 102,
+      "className": "Druid",
+      "classLabel": "德鲁伊",
+      "specName": "Balance",
+      "label": "平衡"
+    },
+    {
+      "id": 103,
+      "className": "Druid",
+      "classLabel": "德鲁伊",
+      "specName": "Feral",
+      "label": "野性"
+    },
+    {
+      "id": 104,
+      "className": "Druid",
+      "classLabel": "德鲁伊",
+      "specName": "Guardian",
+      "label": "守护"
+    },
+    {
+      "id": 105,
+      "className": "Druid",
+      "classLabel": "德鲁伊",
+      "specName": "Restoration",
+      "label": "恢复"
+    },
+    {
+      "id": 1467,
+      "className": "Evoker",
+      "classLabel": "唤魔师",
+      "specName": "Devastation",
+      "label": "湮灭"
+    },
+    {
+      "id": 1468,
+      "className": "Evoker",
+      "classLabel": "唤魔师",
+      "specName": "Preservation",
+      "label": "恩护"
+    },
+    {
+      "id": 1473,
+      "className": "Evoker",
+      "classLabel": "唤魔师",
+      "specName": "Augmentation",
+      "label": "增辉"
+    },
+    {
+      "id": 253,
+      "className": "Hunter",
+      "classLabel": "猎人",
+      "specName": "BeastMastery",
+      "label": "野兽控制"
+    },
+    {
+      "id": 254,
+      "className": "Hunter",
+      "classLabel": "猎人",
+      "specName": "Marksmanship",
+      "label": "射击"
+    },
+    {
+      "id": 255,
+      "className": "Hunter",
+      "classLabel": "猎人",
+      "specName": "Survival",
+      "label": "生存"
+    },
+    {
+      "id": 62,
+      "className": "Mage",
+      "classLabel": "法师",
+      "specName": "Arcane",
+      "label": "奥术"
+    },
+    {
+      "id": 63,
+      "className": "Mage",
+      "classLabel": "法师",
+      "specName": "Fire",
+      "label": "火焰"
+    },
+    {
+      "id": 64,
+      "className": "Mage",
+      "classLabel": "法师",
+      "specName": "Frost",
+      "label": "冰霜"
+    },
+    {
+      "id": 268,
+      "className": "Monk",
+      "classLabel": "武僧",
+      "specName": "Brewmaster",
+      "label": "酒仙"
+    },
+    {
+      "id": 270,
+      "className": "Monk",
+      "classLabel": "武僧",
+      "specName": "Mistweaver",
+      "label": "织雾"
+    },
+    {
+      "id": 269,
+      "className": "Monk",
+      "classLabel": "武僧",
+      "specName": "Windwalker",
+      "label": "踏风"
+    },
+    {
+      "id": 65,
+      "className": "Paladin",
+      "classLabel": "圣骑士",
+      "specName": "Holy",
+      "label": "神圣"
+    },
+    {
+      "id": 66,
+      "className": "Paladin",
+      "classLabel": "圣骑士",
+      "specName": "Protection",
+      "label": "防护"
+    },
+    {
+      "id": 70,
+      "className": "Paladin",
+      "classLabel": "圣骑士",
+      "specName": "Retribution",
+      "label": "惩戒"
+    },
+    {
+      "id": 256,
+      "className": "Priest",
+      "classLabel": "牧师",
+      "specName": "Discipline",
+      "label": "戒律"
+    },
+    {
+      "id": 257,
+      "className": "Priest",
+      "classLabel": "牧师",
+      "specName": "Holy",
+      "label": "神圣"
+    },
+    {
+      "id": 258,
+      "className": "Priest",
+      "classLabel": "牧师",
+      "specName": "Shadow",
+      "label": "暗影"
+    },
+    {
+      "id": 259,
+      "className": "Rogue",
+      "classLabel": "潜行者",
+      "specName": "Assassination",
+      "label": "奇袭"
+    },
+    {
+      "id": 260,
+      "className": "Rogue",
+      "classLabel": "潜行者",
+      "specName": "Outlaw",
+      "label": "狂徒"
+    },
+    {
+      "id": 261,
+      "className": "Rogue",
+      "classLabel": "潜行者",
+      "specName": "Subtlety",
+      "label": "敏锐"
+    },
+    {
+      "id": 262,
+      "className": "Shaman",
+      "classLabel": "萨满祭司",
+      "specName": "Elemental",
+      "label": "元素"
+    },
+    {
+      "id": 263,
+      "className": "Shaman",
+      "classLabel": "萨满祭司",
+      "specName": "Enhancement",
+      "label": "增强"
+    },
+    {
+      "id": 264,
+      "className": "Shaman",
+      "classLabel": "萨满祭司",
+      "specName": "Restoration",
+      "label": "恢复"
+    },
+    {
+      "id": 265,
+      "className": "Warlock",
+      "classLabel": "术士",
+      "specName": "Affliction",
+      "label": "痛苦"
+    },
+    {
+      "id": 266,
+      "className": "Warlock",
+      "classLabel": "术士",
+      "specName": "Demonology",
+      "label": "恶魔学识"
+    },
+    {
+      "id": 267,
+      "className": "Warlock",
+      "classLabel": "术士",
+      "specName": "Destruction",
+      "label": "毁灭"
+    },
+    {
+      "id": 71,
+      "className": "Warrior",
+      "classLabel": "战士",
+      "specName": "Arms",
+      "label": "武器"
+    },
+    {
+      "id": 72,
+      "className": "Warrior",
+      "classLabel": "战士",
+      "specName": "Fury",
+      "label": "狂怒"
+    },
+    {
+      "id": 73,
+      "className": "Warrior",
+      "classLabel": "战士",
+      "specName": "Protection",
+      "label": "防护"
+    }
+  ],
+  "spells": [
+    {
+      "id": 740,
+      "nameEN": "Tranquility",
+      "specs": [
+        105
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "宁静",
+      "icon": "spell_nature_tranquility",
+      "primarySpecs": [
+        105
+      ],
+      "image": "assets/spells/740.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1122,
+      "nameEN": "Summon Infernal",
+      "specs": [
+        267
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "召唤地狱火",
+      "icon": "spell_shadow_summoninfernal",
+      "primarySpecs": [
+        267
+      ],
+      "image": "assets/spells/1122.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1719,
+      "nameEN": "Recklessness",
+      "specs": [
+        72
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "鲁莽",
+      "icon": "warrior_talent_icon_innerrage",
+      "primarySpecs": [
+        72
+      ],
+      "image": "assets/spells/1719.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1856,
+      "nameEN": "Vanish",
+      "specs": [
+        259,
+        260,
+        261
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "消失",
+      "icon": "ability_vanish",
+      "primarySpecs": [],
+      "image": "assets/spells/1856.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 5217,
+      "nameEN": "Tiger's Fury",
+      "specs": [
+        103
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "猛虎之怒",
+      "icon": "ability_mount_jungletiger",
+      "primarySpecs": [
+        103
+      ],
+      "image": "assets/spells/5217.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 10060,
+      "nameEN": "Power Infusion",
+      "specs": [
+        256,
+        257,
+        258
+      ],
+      "talent": false,
+      "category": "external_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "能量灌注",
+      "icon": "spell_holy_powerinfusion",
+      "primarySpecs": [
+        258
+      ],
+      "image": "assets/spells/10060.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 12051,
+      "nameEN": "Evocation",
+      "specs": [
+        62
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "唤醒",
+      "icon": "spell_nature_purge",
+      "primarySpecs": [],
+      "image": "assets/spells/12051.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 13750,
+      "nameEN": "Adrenaline Rush",
+      "specs": [
+        260
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "冲动",
+      "icon": "spell_shadow_shadowworddominate",
+      "primarySpecs": [
+        260
+      ],
+      "image": "assets/spells/13750.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 15286,
+      "nameEN": "Vampiric Embrace",
+      "specs": [
+        258
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "吸血鬼的拥抱",
+      "icon": "spell_shadow_unsummonbuilding",
+      "primarySpecs": [],
+      "image": "assets/spells/15286.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 19574,
+      "nameEN": "Bestial Wrath",
+      "specs": [
+        253
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "狂野怒火",
+      "icon": "ability_druid_ferociousbite",
+      "primarySpecs": [
+        253
+      ],
+      "image": "assets/spells/19574.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 31884,
+      "nameEN": "Avenging Wrath",
+      "specs": [
+        65,
+        66,
+        70
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "复仇之怒",
+      "icon": "spell_holy_avenginewrath",
+      "primarySpecs": [
+        65,
+        66,
+        70
+      ],
+      "image": "assets/spells/31884.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 33891,
+      "nameEN": "Incarnation: Tree of Life",
+      "specs": [
+        105
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "化身：生命之树",
+      "icon": "ability_druid_improvedtreeform",
+      "primarySpecs": [
+        105
+      ],
+      "image": "assets/spells/33891.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 42650,
+      "nameEN": "Army of the Dead",
+      "specs": [
+        252
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "亡者大军",
+      "icon": "spell_deathknight_armyofthedead",
+      "primarySpecs": [
+        252
+      ],
+      "image": "assets/spells/42650.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "aliases": [
+        "大军"
+      ]
+    },
+    {
+      "id": 46585,
+      "nameEN": "Raise Dead",
+      "specs": [
+        251
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "亡者复生",
+      "icon": "inv_pet_ghoul",
+      "primarySpecs": [],
+      "image": "assets/spells/46585.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 47568,
+      "nameEN": "Empower Rune Weapon",
+      "specs": [
+        251
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "符文武器增效",
+      "icon": "inv_sword_62",
+      "primarySpecs": [],
+      "image": "assets/spells/47568.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 47788,
+      "nameEN": "Guardian Spirit",
+      "specs": [
+        257
+      ],
+      "talent": false,
+      "category": "external_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "守护之魂",
+      "icon": "spell_holy_guardianspirit",
+      "primarySpecs": [],
+      "image": "assets/spells/47788.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 49028,
+      "nameEN": "Dancing Rune Weapon",
+      "specs": [
+        250
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "符文刃舞",
+      "icon": "inv_sword_07",
+      "primarySpecs": [
+        250
+      ],
+      "image": "assets/spells/49028.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 50334,
+      "nameEN": "狂暴",
+      "specs": [
+        104
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "name": "狂暴",
+      "icon": "ability_druid_berserk",
+      "primarySpecs": [
+        104
+      ],
+      "image": "assets/spells/50334.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 51271,
+      "nameEN": "Pillar of Frost",
+      "specs": [
+        251
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "冰霜之柱",
+      "icon": "ability_deathknight_pillaroffrost",
+      "primarySpecs": [
+        251
+      ],
+      "image": "assets/spells/51271.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 51690,
+      "nameEN": "Killing Spree",
+      "specs": [
+        260
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "影舞步",
+      "icon": "inv_112_rogue_betweentheeyes",
+      "primarySpecs": [
+        260
+      ],
+      "image": "assets/spells/51690.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 62618,
+      "nameEN": "Power Word: Barrier",
+      "specs": [
+        256
+      ],
+      "talent": false,
+      "category": "raid_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "真言术：障",
+      "icon": "spell_holy_powerwordbarrier",
+      "primarySpecs": [],
+      "image": "assets/spells/62618.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 64843,
+      "nameEN": "Divine Hymn",
+      "specs": [
+        257
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "神圣赞美诗",
+      "icon": "spell_holy_divinehymn",
+      "primarySpecs": [
+        257
+      ],
+      "image": "assets/spells/64843.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 80240,
+      "nameEN": "Havoc",
+      "specs": [
+        267
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "浩劫",
+      "icon": "ability_warlock_baneofhavoc",
+      "primarySpecs": [],
+      "image": "assets/spells/80240.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 84714,
+      "nameEN": "Frozen Orb",
+      "specs": [
+        64
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "寒冰宝珠",
+      "icon": "spell_frost_frozenorb",
+      "primarySpecs": [
+        64
+      ],
+      "image": "assets/spells/84714.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 86659,
+      "nameEN": "Guardian of Ancient Kings",
+      "specs": [
+        66
+      ],
+      "talent": false,
+      "category": "personal_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "远古列王守卫",
+      "icon": "spell_holy_heroism",
+      "primarySpecs": [],
+      "image": "assets/spells/86659.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 98008,
+      "nameEN": "Spirit Link Totem",
+      "specs": [
+        264
+      ],
+      "talent": false,
+      "category": "raid_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "灵魂链接图腾",
+      "icon": "spell_shaman_spiritlink",
+      "primarySpecs": [],
+      "image": "assets/spells/98008.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 102543,
+      "nameEN": "Incarnation: Avatar of Ashamane",
+      "specs": [
+        103
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "化身：阿莎曼之灵",
+      "icon": "spell_druid_incarnation",
+      "primarySpecs": [
+        103
+      ],
+      "image": "assets/spells/102543.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "note": "可选天赋／同类替代技能，按自己的天赋选择。"
+    },
+    {
+      "id": 102558,
+      "nameEN": "Incarnation: Guardian of Ursoc",
+      "specs": [
+        104
+      ],
+      "talent": true,
+      "category": "personal_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "化身：乌索克的守护者",
+      "icon": "spell_druid_incarnation",
+      "primarySpecs": [
+        104
+      ],
+      "image": "assets/spells/102558.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "note": "可选天赋／同类替代技能，按自己的天赋选择。"
+    },
+    {
+      "id": 102560,
+      "nameEN": "Incarnation: Chosen of Elune",
+      "specs": [
+        102
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "化身：艾露恩之眷",
+      "icon": "spell_druid_incarnation",
+      "primarySpecs": [
+        102
+      ],
+      "image": "assets/spells/102560.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "note": "可选天赋／同类替代技能，按自己的天赋选择。"
+    },
+    {
+      "id": 106951,
+      "nameEN": "Berserk",
+      "specs": [
+        103
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "狂暴",
+      "icon": "ability_druid_berserk",
+      "primarySpecs": [
+        103
+      ],
+      "image": "assets/spells/106951.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 107574,
+      "nameEN": "Avatar",
+      "specs": [
+        71,
+        72,
+        73
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "天神下凡",
+      "icon": "warrior_talent_icon_avatar",
+      "primarySpecs": [
+        71,
+        72,
+        73
+      ],
+      "image": "assets/spells/107574.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 108280,
+      "nameEN": "Healing Tide Totem",
+      "specs": [
+        264
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "治疗之潮图腾",
+      "icon": "ability_shaman_healingtide",
+      "primarySpecs": [
+        264
+      ],
+      "image": "assets/spells/108280.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 114050,
+      "nameEN": "Ascendance",
+      "specs": [
+        262
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "升腾",
+      "icon": "8026697",
+      "primarySpecs": [
+        262
+      ],
+      "image": "assets/spells/114050.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 114051,
+      "nameEN": "Ascendance",
+      "specs": [
+        263
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "升腾",
+      "icon": "8026696",
+      "primarySpecs": [
+        263
+      ],
+      "image": "assets/spells/114051.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 114052,
+      "nameEN": "Ascendance",
+      "specs": [
+        264
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "升腾",
+      "icon": "8026698",
+      "primarySpecs": [
+        264
+      ],
+      "image": "assets/spells/114052.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 115310,
+      "nameEN": "Revival",
+      "specs": [
+        270
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "还魂术",
+      "icon": "spell_monk_revival",
+      "primarySpecs": [
+        270
+      ],
+      "image": "assets/spells/115310.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 116680,
+      "nameEN": "Thunder Focus Tea",
+      "specs": [
+        270
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "雷光聚神茶",
+      "icon": "ability_monk_thunderfocustea",
+      "primarySpecs": [],
+      "image": "assets/spells/116680.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 120517,
+      "nameEN": "Halo",
+      "specs": [
+        257
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "光晕",
+      "icon": "ability_priest_halo",
+      "primarySpecs": [],
+      "image": "assets/spells/120517.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 120644,
+      "nameEN": "Halo",
+      "specs": [
+        258
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "光晕",
+      "icon": "ability_priest_halo_shadow",
+      "primarySpecs": [],
+      "image": "assets/spells/120644.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 121471,
+      "nameEN": "Shadow Blades",
+      "specs": [
+        261
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "暗影之刃",
+      "icon": "inv_knife_1h_grimbatolraid_d_03",
+      "primarySpecs": [
+        261
+      ],
+      "image": "assets/spells/121471.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 123904,
+      "nameEN": "Invoke Xuen, the White Tiger",
+      "specs": [
+        269
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "白虎下凡",
+      "icon": "ability_monk_summontigerstatue",
+      "primarySpecs": [
+        269
+      ],
+      "image": "assets/spells/123904.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 132578,
+      "nameEN": "Invoke Niuzao, the Black Ox",
+      "specs": [
+        268
+      ],
+      "talent": false,
+      "category": "personal_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "玄牛下凡",
+      "icon": "spell_monk_brewmaster_spec",
+      "primarySpecs": [
+        268
+      ],
+      "image": "assets/spells/132578.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 153561,
+      "nameEN": "Meteor",
+      "specs": [
+        63
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "流星",
+      "icon": "spell_mage_meteor",
+      "primarySpecs": [],
+      "image": "assets/spells/153561.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 167105,
+      "nameEN": "Colossus Smash",
+      "specs": [
+        71
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "巨人打击",
+      "icon": "inv_warbreaker",
+      "primarySpecs": [],
+      "image": "assets/spells/167105.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 185313,
+      "nameEN": "Shadow Dance",
+      "specs": [
+        261
+      ],
+      "talent": false,
+      "name": "暗影之舞",
+      "icon": "ability_rogue_shadowdance",
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "primarySpecs": [
+        261
+      ],
+      "image": "assets/spells/185313.webp",
+      "metadataStatus": "scope+tooltip+Lorrgs-reviewed; LIVE_NOT_RUN"
+    },
+    {
+      "id": 186289,
+      "nameEN": "Aspect of the Eagle",
+      "specs": [
+        255
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "雄鹰守护",
+      "icon": "spell_hunter_aspectoftheironhawk",
+      "primarySpecs": [],
+      "image": "assets/spells/186289.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 187827,
+      "nameEN": "Metamorphosis",
+      "specs": [
+        581
+      ],
+      "talent": false,
+      "category": "personal_defensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "恶魔变形",
+      "icon": "ability_demonhunter_metamorphasistank",
+      "primarySpecs": [
+        581
+      ],
+      "image": "assets/spells/187827.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 190319,
+      "nameEN": "Combustion",
+      "specs": [
+        63
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "燃烧",
+      "icon": "spell_fire_sealoffire",
+      "primarySpecs": [
+        63
+      ],
+      "image": "assets/spells/190319.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 191427,
+      "nameEN": "Metamorphosis",
+      "specs": [
+        577
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "恶魔变形",
+      "icon": "ability_demonhunter_metamorphasisdps",
+      "primarySpecs": [
+        577
+      ],
+      "image": "assets/spells/191427.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 191634,
+      "nameEN": "Stormkeeper",
+      "specs": [
+        262
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "风暴守护者",
+      "icon": "ability_thunderking_lightningwhip",
+      "primarySpecs": [
+        262
+      ],
+      "image": "assets/spells/191634.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 197214,
+      "nameEN": "Sundering",
+      "specs": [
+        263
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "裂地术",
+      "icon": "ability_rhyolith_lavapool",
+      "primarySpecs": [],
+      "image": "assets/spells/197214.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 198013,
+      "nameEN": "Eye Beam",
+      "specs": [
+        577
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "眼棱",
+      "icon": "ability_demonhunter_eyebeam",
+      "primarySpecs": [],
+      "image": "assets/spells/198013.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 200183,
+      "nameEN": "Apotheosis",
+      "specs": [
+        257
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "神圣化身",
+      "icon": "ability_priest_ascension",
+      "primarySpecs": [
+        257
+      ],
+      "image": "assets/spells/200183.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 200652,
+      "nameEN": "Tyr's Deliverance",
+      "specs": [
+        65
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "提尔的拯救",
+      "icon": "inv_mace_2h_artifactsilverhand_d_01",
+      "primarySpecs": [],
+      "image": "assets/spells/200652.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 202770,
+      "nameEN": "Fury of Elune",
+      "specs": [
+        102
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "艾露恩之怒",
+      "icon": "ability_druid_dreamstate",
+      "primarySpecs": [],
+      "image": "assets/spells/202770.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 204066,
+      "nameEN": "Lunar Beam",
+      "specs": [
+        104
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "明月普照",
+      "icon": "spell_nature_moonglow",
+      "primarySpecs": [],
+      "image": "assets/spells/204066.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 205021,
+      "nameEN": "Ray of Frost",
+      "specs": [
+        64
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "冰霜射线",
+      "icon": "ability_mage_rayoffrost",
+      "primarySpecs": [
+        64
+      ],
+      "image": "assets/spells/205021.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 205180,
+      "nameEN": "Summon Darkglare",
+      "specs": [
+        265
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "召唤黑眼",
+      "icon": "inv_beholderwarlock",
+      "primarySpecs": [
+        265
+      ],
+      "image": "assets/spells/205180.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 205636,
+      "nameEN": "Force of Nature",
+      "specs": [
+        102
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "自然之力",
+      "icon": "ability_druid_forceofnature",
+      "primarySpecs": [],
+      "image": "assets/spells/205636.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 216331,
+      "nameEN": "Avenging Crusader",
+      "specs": [
+        65
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "复仇十字军",
+      "icon": "ability_paladin_veneration",
+      "primarySpecs": [
+        65
+      ],
+      "image": "assets/spells/216331.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "note": "可选天赋／同类替代技能，按自己的天赋选择。"
+    },
+    {
+      "id": 227847,
+      "name": "剑刃风暴",
+      "nameEN": "剑刃风暴",
+      "icon": "ability_warrior_bladestorm",
+      "specs": [
+        71
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "primarySpecs": [
+        71
+      ],
+      "image": "assets/spells/227847.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 228260,
+      "nameEN": "Voidform",
+      "specs": [
+        258
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "虚空形态",
+      "icon": "spell_priest_void-blast",
+      "primarySpecs": [
+        258
+      ],
+      "image": "assets/spells/228260.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 228920,
+      "nameEN": "破坏者",
+      "specs": [
+        71
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "name": "破坏者",
+      "icon": "warrior_talent_icon_ravager",
+      "primarySpecs": [],
+      "image": "assets/spells/228920.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 255937,
+      "nameEN": "Wake of Ashes",
+      "specs": [
+        70
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "灰烬觉醒",
+      "icon": "inv_sword_2h_artifactashbringerfire_d_03",
+      "primarySpecs": [
+        70
+      ],
+      "image": "assets/spells/255937.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 258860,
+      "nameEN": "Essence Break",
+      "specs": [
+        577
+      ],
+      "talent": true,
+      "name": "精华破碎",
+      "icon": "spell_shadow_ritualofsacrifice",
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "primarySpecs": [
+        577
+      ],
+      "image": "assets/spells/258860.webp",
+      "metadataStatus": "scope+tooltip+Lorrgs-reviewed; LIVE_NOT_RUN"
+    },
+    {
+      "id": 260243,
+      "nameEN": "Volley",
+      "specs": [
+        254
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "乱射",
+      "icon": "ability_hunter_rapidkilling",
+      "primarySpecs": [],
+      "image": "assets/spells/260243.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 260708,
+      "nameEN": "Sweeping Strikes",
+      "specs": [
+        71
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "横扫攻击",
+      "icon": "ability_rogue_slicedice",
+      "primarySpecs": [],
+      "image": "assets/spells/260708.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 263165,
+      "nameEN": "Void Torrent",
+      "specs": [
+        258
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "虚空洪流",
+      "icon": "spell_priest_voidsear",
+      "primarySpecs": [],
+      "image": "assets/spells/263165.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 265187,
+      "nameEN": "Summon Demonic Tyrant",
+      "specs": [
+        266
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "召唤恶魔暴君",
+      "icon": "inv_summondemonictyrant",
+      "primarySpecs": [
+        266
+      ],
+      "image": "assets/spells/265187.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 274837,
+      "nameEN": "Feral Frenzy",
+      "specs": [
+        103
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "野性狂乱",
+      "icon": "ability_druid_rake",
+      "primarySpecs": [],
+      "image": "assets/spells/274837.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 279302,
+      "nameEN": "Frostwyrm's Fury",
+      "specs": [
+        251
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "冰霜巨龙之怒",
+      "icon": "achievement_boss_sindragosa",
+      "primarySpecs": [],
+      "image": "assets/spells/279302.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 288613,
+      "nameEN": "Trueshot",
+      "specs": [
+        254
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "百发百中",
+      "icon": "ability_trueshot",
+      "primarySpecs": [
+        254
+      ],
+      "image": "assets/spells/288613.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 321507,
+      "nameEN": "Touch of the Magi",
+      "specs": [
+        62
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "大法师之触",
+      "icon": "inv_ability_mage_radiantspark",
+      "primarySpecs": [
+        62
+      ],
+      "image": "assets/spells/321507.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 322109,
+      "nameEN": "Touch of Death",
+      "specs": [
+        269
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "轮回之触",
+      "icon": "ability_monk_touchofdeath",
+      "primarySpecs": [],
+      "image": "assets/spells/322109.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 322118,
+      "nameEN": "Invoke Yu'lon, the Jade Serpent",
+      "specs": [
+        270
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "青龙下凡",
+      "icon": "ability_monk_dragonkick",
+      "primarySpecs": [
+        270
+      ],
+      "image": "assets/spells/322118.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 325153,
+      "nameEN": "Exploding Keg",
+      "specs": [
+        268
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "爆炸酒桶",
+      "icon": "inv12_ability_monk_explodingkeg",
+      "primarySpecs": [
+        268
+      ],
+      "image": "assets/spells/325153.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 325197,
+      "nameEN": "Invoke Chi-Ji, the Red Crane",
+      "specs": [
+        270
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "朱鹤下凡",
+      "icon": "inv_pet_cranegod",
+      "primarySpecs": [
+        270
+      ],
+      "image": "assets/spells/325197.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 343527,
+      "nameEN": "Execution Sentence",
+      "specs": [
+        70
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "处决宣判",
+      "icon": "spell_paladin_executionsentence",
+      "primarySpecs": [
+        70
+      ],
+      "image": "assets/spells/343527.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 357210,
+      "nameEN": "Deep Breath",
+      "specs": [
+        1467,
+        1468
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "深呼吸",
+      "icon": "ability_evoker_deepbreath",
+      "primarySpecs": [],
+      "image": "assets/spells/357210.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 359816,
+      "nameEN": "Dream Flight",
+      "specs": [
+        1468
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "梦境飞行",
+      "icon": "ability_evoker_dreamflight",
+      "primarySpecs": [
+        1468
+      ],
+      "image": "assets/spells/359816.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 360194,
+      "nameEN": "Deathmark",
+      "specs": [
+        259
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "死亡印记",
+      "icon": "ability_rogue_deathmark",
+      "primarySpecs": [
+        259
+      ],
+      "image": "assets/spells/360194.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 363534,
+      "nameEN": "Rewind",
+      "specs": [
+        1468
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "回溯",
+      "icon": "ability_evoker_rewind",
+      "primarySpecs": [
+        1468
+      ],
+      "image": "assets/spells/363534.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 365350,
+      "nameEN": "Arcane Surge",
+      "specs": [
+        62
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "奥术涌动",
+      "icon": "ability_mage_arcanesurge",
+      "primarySpecs": [
+        62
+      ],
+      "image": "assets/spells/365350.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 370537,
+      "nameEN": "Stasis",
+      "specs": [
+        1468
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "静滞",
+      "icon": "ability_evoker_stasis",
+      "primarySpecs": [
+        1468
+      ],
+      "image": "assets/spells/370537.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 370553,
+      "nameEN": "扭转天平",
+      "specs": [
+        1467,
+        1468,
+        1473
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "name": "扭转天平",
+      "icon": "ability_evoker_tipthescales",
+      "primarySpecs": [],
+      "image": "assets/spells/370553.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 370966,
+      "nameEN": "The Hunt",
+      "specs": [
+        577
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "恶魔追击",
+      "icon": "inv_ability_demonhunter_thehunt",
+      "primarySpecs": [
+        577
+      ],
+      "image": "assets/spells/370966.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 375087,
+      "nameEN": "Dragonrage",
+      "specs": [
+        1467
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "狂龙之怒",
+      "icon": "ability_evoker_dragonrage",
+      "primarySpecs": [
+        1467
+      ],
+      "image": "assets/spells/375087.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 375576,
+      "nameEN": "Divine Toll",
+      "specs": [
+        65,
+        66,
+        70
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "圣洁鸣钟",
+      "icon": "inv_ability_paladin_divinetoll",
+      "primarySpecs": [],
+      "image": "assets/spells/375576.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 376079,
+      "nameEN": "勇士之矛",
+      "specs": [
+        71,
+        72,
+        73
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "name": "勇士之矛",
+      "icon": "inv_ability_warrior_championsspear",
+      "primarySpecs": [],
+      "image": "assets/spells/376079.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 381989,
+      "nameEN": "Keep It Rolling",
+      "specs": [
+        260
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "时运继延",
+      "icon": "ability_rogue_keepitrolling",
+      "primarySpecs": [
+        260
+      ],
+      "image": "assets/spells/381989.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 382266,
+      "nameEN": "Fire Breath",
+      "specs": [
+        1467
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "火焰吐息",
+      "icon": "ability_evoker_firebreath",
+      "primarySpecs": [],
+      "image": "assets/spells/382266.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 382411,
+      "nameEN": "Eternity Surge",
+      "specs": [
+        1467
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "永恒之涌",
+      "icon": "ability_evoker_eternitysurge",
+      "primarySpecs": [],
+      "image": "assets/spells/382411.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 383410,
+      "nameEN": "Celestial Alignment",
+      "specs": [
+        102
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "超凡之盟",
+      "icon": "spell_nature_natureguardian",
+      "primarySpecs": [
+        102
+      ],
+      "image": "assets/spells/383410.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 384352,
+      "nameEN": "Doom Winds",
+      "specs": [
+        263
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "毁灭之风",
+      "icon": "ability_ironmaidens_swirlingvortex",
+      "primarySpecs": [
+        263
+      ],
+      "image": "assets/spells/384352.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 385059,
+      "nameEN": "Odyn's Fury",
+      "specs": [
+        72
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "奥丁之怒",
+      "icon": "inv_sword_1h_artifactvigfus_d_01",
+      "primarySpecs": [
+        72
+      ],
+      "image": "assets/spells/385059.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 385627,
+      "nameEN": "Kingsbane",
+      "specs": [
+        259
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "君王之灾",
+      "icon": "inv_knife_1h_artifactgarona_d_01",
+      "primarySpecs": [
+        259
+      ],
+      "image": "assets/spells/385627.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 388615,
+      "nameEN": "Restoral",
+      "specs": [
+        270
+      ],
+      "talent": true,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "还阳术",
+      "icon": "ability_monk_tigerstyle",
+      "primarySpecs": [],
+      "image": "assets/spells/388615.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 390163,
+      "nameEN": "Sigil of Spite",
+      "specs": [
+        581
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "怨念咒符",
+      "icon": "inv_ability_demonhunter_elysiandecree",
+      "primarySpecs": [],
+      "image": "assets/spells/390163.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 391528,
+      "nameEN": "万灵之召",
+      "specs": [
+        102,
+        103,
+        104,
+        105
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "万灵之召",
+      "icon": "inv_ability_druid_convokethespirits",
+      "primarySpecs": [
+        102,
+        103,
+        105
+      ],
+      "image": "assets/spells/391528.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 395152,
+      "nameEN": "Ebon Might",
+      "specs": [
+        1473
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "黑檀之力",
+      "icon": "spell_sarkareth",
+      "primarySpecs": [
+        1473
+      ],
+      "image": "assets/spells/395152.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 403631,
+      "nameEN": "Breath of Eons",
+      "specs": [
+        1473
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "亘古吐息",
+      "icon": "ability_evoker_breathofeons",
+      "primarySpecs": [
+        1473
+      ],
+      "image": "assets/spells/403631.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 404977,
+      "nameEN": "Time Skip",
+      "specs": [
+        1473
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "时间跳跃",
+      "icon": "ability_evoker_timeskip",
+      "primarySpecs": [],
+      "image": "assets/spells/404977.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 421453,
+      "nameEN": "Ultimate Penitence",
+      "specs": [
+        256
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "终极苦修",
+      "icon": "ability_priest_ascendance",
+      "primarySpecs": [
+        256
+      ],
+      "image": "assets/spells/421453.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 433874,
+      "nameEN": "Deep Breath",
+      "specs": [
+        1467
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "深呼吸",
+      "icon": "ability_evoker_deepbreath",
+      "primarySpecs": [],
+      "image": "assets/spells/433874.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 436358,
+      "nameEN": "Demolish",
+      "specs": [
+        71
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "崩摧",
+      "icon": "inv_ability_colossuswarrior_demolish",
+      "primarySpecs": [],
+      "image": "assets/spells/436358.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 439843,
+      "nameEN": "Reaper's Mark",
+      "specs": [
+        250,
+        251
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "死神印记",
+      "icon": "inv_ability_deathbringerdeathknight_reapersmark",
+      "primarySpecs": [
+        250,
+        251
+      ],
+      "image": "assets/spells/439843.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 442726,
+      "nameEN": "Malevolence",
+      "specs": [
+        265,
+        267
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "怨毒",
+      "icon": "inv_ability_hellcallerwarlock_malevolence",
+      "primarySpecs": [
+        265,
+        267
+      ],
+      "image": "assets/spells/442726.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 443028,
+      "nameEN": "Celestial Conduit",
+      "specs": [
+        269,
+        270
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "天神御身",
+      "icon": "inv_ability_conduitofthecelestialsmonk_celestialconduit",
+      "primarySpecs": [
+        270
+      ],
+      "image": "assets/spells/443028.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 446035,
+      "nameEN": "Bladestorm",
+      "specs": [
+        72
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "剑刃风暴",
+      "icon": "ability_warrior_bladestorm",
+      "primarySpecs": [
+        72
+      ],
+      "image": "assets/spells/446035.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 472433,
+      "nameEN": "Evangelism",
+      "specs": [
+        256
+      ],
+      "talent": false,
+      "category": "healer_cd",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "福音",
+      "icon": "spell_holy_divineillumination",
+      "primarySpecs": [
+        256
+      ],
+      "image": "assets/spells/472433.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1217605,
+      "nameEN": "Void Metamorphosis",
+      "specs": [
+        1480
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "虚空变形",
+      "icon": "inv_112_ability_demonhunter_metamorphasisvoid",
+      "primarySpecs": [
+        1480
+      ],
+      "image": "assets/spells/1217605.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1218090,
+      "nameEN": "Primordial Storm",
+      "specs": [
+        263
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "始源风暴",
+      "icon": "ability_shaman_ascendance",
+      "primarySpecs": [
+        263
+      ],
+      "image": "assets/spells/1218090.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1233448,
+      "nameEN": "Dark Transformation",
+      "specs": [
+        252
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "黑暗突变",
+      "icon": "achievement_boss_festergutrotface",
+      "primarySpecs": [
+        252
+      ],
+      "image": "assets/spells/1233448.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "aliases": [
+        "突变",
+        "变身"
+      ]
+    },
+    {
+      "id": 1246167,
+      "nameEN": "The Hunt",
+      "specs": [
+        1480
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "恶魔追击",
+      "icon": "inv_12_voiddh_ability_thehunt",
+      "primarySpecs": [],
+      "image": "assets/spells/1246167.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1249625,
+      "nameEN": "Zenith",
+      "specs": [
+        269
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "乾元之巅",
+      "icon": "inv_ability_monk_weaponsoforder",
+      "primarySpecs": [
+        269
+      ],
+      "image": "assets/spells/1249625.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1249658,
+      "nameEN": "Breath of Sindragosa",
+      "specs": [
+        251
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "冰龙吐息",
+      "icon": "spell_deathknight_breathofsindragosa",
+      "primarySpecs": [
+        251
+      ],
+      "image": "assets/spells/1249658.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "aliases": [
+        "辛达苟萨之息",
+        "吐息"
+      ]
+    },
+    {
+      "id": 1250646,
+      "nameEN": "Takedown",
+      "specs": [
+        255
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "狩魂一击",
+      "icon": "inv12_ability_hunter_takedown",
+      "primarySpecs": [
+        255
+      ],
+      "image": "assets/spells/1250646.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1252871,
+      "nameEN": "赤红之月",
+      "specs": [
+        104
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "name": "赤红之月",
+      "icon": "sha_ability_mage_firestarter_nightmare",
+      "primarySpecs": [],
+      "image": "assets/spells/1252871.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1253799,
+      "nameEN": "碎甲咆哮",
+      "specs": [
+        104
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "name": "碎甲咆哮",
+      "icon": "artifactability_feraldruid_openwounds",
+      "primarySpecs": [],
+      "image": "assets/spells/1253799.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1257052,
+      "nameEN": "Dark Harvest",
+      "specs": [
+        265
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "name": "幽冥收割",
+      "icon": "inv_ability_warlock_soulrot",
+      "primarySpecs": [
+        265
+      ],
+      "image": "assets/spells/1257052.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1261193,
+      "nameEN": "Boomstick",
+      "specs": [
+        255
+      ],
+      "talent": false,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "爆裂火铳",
+      "icon": "inv_musket_04",
+      "primarySpecs": [],
+      "image": "assets/spells/1261193.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1271967,
+      "name": "瘟疫降临",
+      "nameEN": "瘟疫降临",
+      "icon": "inv_nullstone_shadow",
+      "specs": [
+        252
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "simc-apl-fa7a6dc",
+        "wowhead-zhCN"
+      ],
+      "primarySpecs": [
+        252
+      ],
+      "image": "assets/spells/1271967.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN",
+      "note": "英雄天赋：黑暗突变后的替代动作，按自己的天赋选择。"
+    },
+    {
+      "id": 1276452,
+      "nameEN": "Grimoire: Imp Lord",
+      "specs": [
+        266
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "魔典：小鬼领主",
+      "icon": "inv_imp3_purple",
+      "primarySpecs": [],
+      "image": "assets/spells/1276452.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1276467,
+      "nameEN": "Grimoire: Fel Ravager",
+      "specs": [
+        266
+      ],
+      "talent": true,
+      "name": "魔典：邪能破坏者",
+      "icon": "spell_shadow_summonfelhunter",
+      "category": "offensive",
+      "sources": [
+        "game-12.1.0.69933",
+        "wowhead-zhCN",
+        "lorrgs-20261028"
+      ],
+      "primarySpecs": [],
+      "image": "assets/spells/1276467.webp",
+      "metadataStatus": "scope+tooltip+Lorrgs-reviewed; LIVE_NOT_RUN"
+    },
+    {
+      "id": 1276672,
+      "nameEN": "Summon Doomguard",
+      "specs": [
+        266
+      ],
+      "talent": true,
+      "category": "offensive",
+      "sources": [
+        "coolplan",
+        "game-12.1.0.69933",
+        "wowhead-zhCN"
+      ],
+      "name": "召唤末日守卫",
+      "icon": "warlock_summon_doomguard",
+      "primarySpecs": [
+        266
+      ],
+      "image": "assets/spells/1276672.webp",
+      "metadataStatus": "scope+tooltip-verified; LIVE_NOT_RUN"
+    }
+  ]
+}

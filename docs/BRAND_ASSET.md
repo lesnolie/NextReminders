@@ -1,5 +1,8 @@
 # 网站图标
 
+> 网页项目：`C:\work\tellmenext-web`；线上入口：https://tellmenext.cc/zh/mplus/ 。本仓库只维护游戏插件，旧 `web/` 已于 2026-10-24 移除。网页修改、预览、构建与发布均在 tellmenext-web 项目进行。
+> 以下旧网页说明仅为历史记录，不作为当前开发入口。插件数据维护源已迁至 `data/`；`tests/fixtures/protocol/` 仅用于旧格式兼容测试。
+
 2026-10-13。当前使用 `web/assets/nextreminders-logo-v2.png`，原始生成图保留；由内置 ImageGen 工具生成。用户提供的 TMN.exe 图标只用作圆角浅底、连续圆管和柔和阴影的风格参考；新图形为 N 与前进箭头，颜色为冷蓝／青色。首页、页眉、页脚和 favicon 引用同一个本地资源。
 
 生成指令（最终使用版本）：

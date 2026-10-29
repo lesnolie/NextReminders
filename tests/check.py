@@ -32,6 +32,10 @@ function object()
   if k=="CreateTexture" then return function() local o=object(); o.owner=self; return o end end
   if k=="CreateFontString" then return function() local o=object(); o.owner=self; fontStrings[#fontStrings+1]=o; return o end end
   if k=="SetScript" then return function(_,key,f) self.scripts[key]=f end end
+  if k=="HookScript" then return function(_,key,f)
+   local old=self.scripts[key]
+   self.scripts[key]=function(...) if old then old(...) end; f(...) end
+  end end
   if k=="SetText" then return function(_,v) self.text=v end end
   if k=="GetText" then return function() return self.text end end
   if k=="SetChecked" then return function(_,v) self.checked=v end end
@@ -53,6 +57,8 @@ function object()
   if k=="EnableMouse" then return function(_,v) self.mouseEnabled=v end end
   if k=="SetTextInsets" then return function(_,...) self.textInsets={...} end end
   if k=="SetAutoFocus" then return function(_,v) self.autoFocus=v end end
+  if k=="GetFrameLevel" then return function() return rawget(self,"frameLevel") or (rawget(self,"parent") and self.parent:GetFrameLevel()+1) or 0 end end
+  if k=="SetFrameLevel" then return function(_,v) self.frameLevel=v end end
   if k=="HasFocus" then return function() return rawget(self,"focused")==true end end
   if k=="SetFocus" then return function()
    if focusedEditor==self then return end
@@ -83,7 +89,8 @@ function CreateFrame(_,name,parent,template)
  if name then _G[name]=t end
  return t
 end
-C_Spell={GetSpellInfo=function(id) return {name="Spell "..id,iconID=id} end}
+C_Spell={GetSpellInfo=function(id) return {name="Spell "..id,iconID=id} end,
+ GetSpellCooldown=function() return {isEnabled=true,isActive=false,isOnGCD=false} end}
 voiceCalls={}
 C_VoiceChat={GetTtsVoices=function() return {{voiceID=1}} end,
  SpeakText=function(_,text) voiceCalls[#voiceCalls+1]=text end}
@@ -96,8 +103,8 @@ def runtime(all_files=False):
     lua = LuaRuntime(unpack_returned_tuples=True)
     lua.execute(MOCK)
     nr = lua.table()
-    names = ["Core.lua", "SpellCatalog.lua", "Theme.lua", "BossRules.lua", "BossData.lua", "DungeonData.lua", "Import.lua", "EventPlans.lua", "TimelinePlans.lua", "BossEvents.lua", "Ready.lua", "Engine.lua", "Preview.lua"]
-    if all_files: names += ["Sounds.lua", "Display.lua", "PreviewUI.lua", "UI.lua", "Main.lua"]
+    names = ["Core.lua", "SpellCatalog.lua", "BurstSpells.lua", "Theme.lua", "BossRules.lua", "BossData.lua", "DungeonData.lua", "Import.lua", "EventPlans.lua", "TimelinePlans.lua", "BossEvents.lua", "Ready.lua", "Engine.lua", "Preview.lua"]
+    if all_files: names += ["Sounds.lua", "Display.lua", "PreviewUI.lua", "UI.lua", "BurstUI.lua", "Main.lua"]
     for name in names:
         chunk = lua.execute("return assert(loadstring(...))",(ADDON/name).read_text(encoding="utf-8"))
         chunk("NextReminders",nr)
@@ -105,6 +112,195 @@ def runtime(all_files=False):
 
 
 class PluginTests(unittest.TestCase):
+
+    def test_reference_event_replay_matches_export_and_manual_rows_reorder(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r'''
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local plan=NR.EventPlans.New(252,3101)
+plan.rows={}
+for i,at in ipairs({4.5,91,140.6,186.4,0,186.1}) do
+ plan.rows[i]={id=i,spellID=i>=5 and 42650 or 63560,anchor=i==5 and 'vuln' or 'start',occurrence=1,time=at,window=10}
+end
+local ui=NR.PreviewUI
+assert(ui:Open(plan))
+local p=NR.preview
+assert(p.expected['event:5']==91.5 and p.duration==202)
+assert(ui.order[3]==5 and #p.chapters==2 and p.chapters[2].estimated)
+p:Tick(92);assert(p.engine.rows[5].used and p.engine.rows[5].target==91.5)
+p:Seek(0,92);assert(not p.engine.rows[5].target)
+p:Seek(92,92);assert(p.engine.rows[5].used)
+assert(plan.rows[5].time==0 and not plan.rows[5].used and plan.rows[3].time==140.6)
+assert(p:SetReferenceEvents(false,92));p:Seek(10,92)
+assert(p:Event('vuln',92));ui.lastUpdate=nil;ui:Update()
+assert(p.engine.rows[5].target==11.7 and ui.order[2]==5,'manual events must reorder by actual target')
+p:Seek(0,92);ui.lastUpdate=nil;ui:Update()
+assert(ui.order[6]==5,'rewinding before the manual event restores unknown ordering')
+plan.rows[5].occurrence=2
+ui.referenceEvents=true;assert(ui:Open(plan))
+assert(not p.expected['event:5'],'do not invent a second vulnerability time')
+p:Seek(200,0);assert(not p.engine.rows[5].target)
+local e=NR.Engine.New();e:Begin(3101,'mythic',nil,{},0,{specID=252},plan)
+e:Tick(200);assert(not e.rows[5].target,'preview estimates must never trigger live reminders')
+''')
+
+    def test_littlewigs_warning_bridge_filters_and_deduplicates_native_signal(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r'''
+function GetSpecializationInfo() return 252 end
+local handlers={}
+BigWigsLoader={RegisterMessage=function(owner,message,fn) handlers[message]=fn end}
+local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+assert(NR.EventPlans.Save(NR.EventPlans.New(252,3101)))
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',3101,'',8)
+local f=assert(handlers.BigWigs_Message)
+local module={GetEncounterID=function()return 3101 end}
+local events=NR.engine.bossEvents
+now=10
+f(nil,{GetEncounterID=function()return 3105 end},1230304)
+f(nil,module,999);f(nil,module,{secret=true})
+assert(not events.counts.vuln)
+f(nil,module,1230304)
+assert(events.counts.vuln==1 and events.records.vuln.at==11.7)
+driver.scripts.OnEvent(driver,'ENCOUNTER_WARNING',{severity=1})
+assert(events.counts.vuln==1)
+now=30;driver.scripts.OnEvent(driver,'ENCOUNTER_WARNING',{severity=1})
+f(nil,module,1230304)
+assert(events.counts.vuln==2 and events.records.vuln.at==31.7)
+driver.scripts.OnEvent(driver,'ENCOUNTER_END');now=50;f(nil,module,1230304)
+assert(events.counts.vuln==2)
+''')
+
+    def test_import_editor_is_above_its_background_and_errors_remain_visible(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r'''
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local ui=NR.UI;local editor,scroll=ui.note,ui.note.parent
+assert(scroll:GetFrameLevel()>ui.notePanel:GetFrameLevel(),'scroll viewport must be above the input background')
+assert(editor:GetFrameLevel()>scroll:GetFrameLevel(),'text and caret must be above the viewport')
+assert(scroll.parent==ui.notePanel,'input must inherit the card visibility and layering')
+assert(editor.point[1]=='TOPLEFT' and editor.point[2]==scroll,'scroll child must have an explicit origin')
+ui.notePanel.scripts.OnMouseDown(ui.notePanel,'LeftButton')
+assert(editor:HasFocus() and ui.noteCaret:IsShown())
+ui:Parse()
+assert(not ui.preview and ui.summary:GetText()~='','empty input must explain the failure in the check panel')
+editor:SetText('EncounterID:3492;Difficulty:Heroic;\nph:1;time:10;spellid:51271;')
+editor.scripts.OnTextChanged(editor);ui:Parse()
+assert(ui.preview and ui.summary:GetText()~='')
+''')
+
+    def test_saved_library_lists_paused_plans_selects_and_rehearses_without_mutation(self):
+        lua,nr=runtime(True);lua.globals().NR=nr;lua.globals().note=self.dungeon_note()
+        lua.execute(r"""
+function GetSpecializationInfo() return 252 end
+local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+local ui=NR.PreviewUI
+assert(ui:OpenLibrary());assert(#ui.entries==0 and not ui.play.themeEnabled)
+NR.UI.note:SetText(note);NR.UI:Parse();NR.UI:Save()
+local saved=NR.EventPlans.Find(252,3105,'mythic');saved.enabled=false
+local static=assert(NR.ParseNote('EncounterID:3492;Difficulty:Heroic;Name:Raid;\nph:1;time:20;spellid:51271;'))
+NR.NotePlans(251).plans['3492:heroic']=static
+assert(ui:OpenLibrary());assert(#ui.entries==2,'other spec is not listed')
+local index
+for i,e in ipairs(ui.entries) do if e.plan.encounterID==3105 then index=i end end
+assert(index);ui.entryButtons[index].scripts.OnClick()
+assert(ui.detail:GetText():find('已暂停'))
+assert(NR.preview.running and not NR.preview.playing,'inspection loads paused')
+ui.play.scripts.OnClick();assert(NR.preview.playing)
+NR.preview:Event('dog',0);NR.preview:Seek(12,0)
+assert(saved.enabled==false and saved.rows[1].time==0)
+ui.frame:Hide();combat=true
+assert(not ui:OpenLibrary() and not NR.preview.running)
+combat=false;function GetSpecializationInfo() return 251 end
+ui:OpenLibrary();assert(#ui.entries==1 and ui.entries[1].plan.encounterID==3492)
+function GetSpecializationInfo() return 252 end
+driver.scripts.OnEvent(driver,'PLAYER_SPECIALIZATION_CHANGED','player')
+assert(#ui.entries==2 and not NR.preview.playing)
+""")
+
+    def test_library_draft_dedup_delete_undo_and_reimport(self):
+        lua,nr=runtime(True);lua.globals().NR=nr;lua.globals().note=self.dungeon_note()
+        lua.execute(r'''
+function GetSpecializationInfo() return 252 end
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local input,ui=NR.UI,NR.PreviewUI
+input.note:SetText(note);input:Parse();input:Save();input:Play()
+assert(#ui.entries==2,'saved plan and import preview must not both appear')
+assert(not ui.entries[1].unsaved and ui.deletePlan.themeEnabled,'saved preview can be managed')
+input:Save();input:Play();assert(#ui.entries==2,'repeat imports replace')
+local changed=assert(NR.EventPlans.ParseDungeon(note));changed.plans[1].rows[1].time=17
+ui:Open(changed);assert(#ui.entries==2 and ui.entries[1].unsaved)
+assert(not ui.deletePlan.themeEnabled,'unsaved draft is not a deletable saved plan')
+ui:OpenLibrary();local key=ui.entries[ui.choice].storageKey
+local other=NR.Copy(NR.db.eventPlans[252][key]);other.specID=251
+NR.db.eventPlans[251]={[key]=other}
+ui.deletePlan.scripts.OnClick();assert(NR.db.eventPlans[252][key],'first click confirms only')
+combat=true;ui.deletePlan.scripts.OnClick();assert(NR.db.eventPlans[252][key])
+combat=false;ui.deletePlan.scripts.OnClick()
+assert(not NR.db.eventPlans[252][key] and NR.db.eventPlans[251][key])
+assert(#ui.entries==1 and not NR.preview.playing)
+assert(not NR.EventPlans.Find(252,NR.db.deletedPlan.plan.encounterID,'mythic'))
+ui.undoDelete.scripts.OnClick();assert(NR.db.eventPlans[252][key] and #ui.entries==2)
+ui.deletePlan.scripts.OnClick();ui.deletePlan.scripts.OnClick()
+local replacement=NR.Copy(NR.db.deletedPlan.plan);replacement.rows[1].time=19
+assert(NR.EventPlans.Save(replacement));ui.undoDelete.scripts.OnClick()
+assert(NR.db.eventPlans[252][key].rows[1].time==19,'undo must not overwrite a new import')
+ui:OpenLibrary();ui:Select(1,false);ui.deletePlan.scripts.OnClick();ui:Select(2,false)
+assert(not ui.deletePending,'changing selection cancels delete confirmation')
+ui.deletePlan.scripts.OnClick();ui.deletePlan.scripts.OnClick()
+ui:Select(1,false);ui.deletePlan.scripts.OnClick();ui.deletePlan.scripts.OnClick()
+assert(#ui.entries==0 and not NR.preview.running and not ui.deletePlan.themeEnabled)
+ui.undoDelete.scripts.OnClick();assert(#ui.entries==1)
+''')
+
+    def test_note_spec_migration_pause_rollback_and_live_isolation(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r'''
+local frost=assert(NR.ParseNote('EncounterID:3492;Difficulty:Heroic;\nph:1;time:20;spellid:51271;'))
+local unholy=assert(NR.ParseNote('EncounterID:3470;Difficulty:Heroic;\nph:1;time:30;spellid:42650;'))
+frost.enabled=true;unholy.enabled=true
+NextRemindersDB={plans={['3492:heroic']=frost,['3470:heroic']=unholy,bad={bad=true}},previousPlans={['3492:heroic']=NR.Copy(frost)}}
+local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+assert(NR.NotePlans(251).plans['3492:heroic'] and NR.NotePlans(252).plans['3470:heroic'])
+assert(not NR.NotePlans(251).plans['3470:heroic'] and NR.db.legacyNotePlans.plans.bad.bad)
+assert(NR.NotePlans(251).previous['3492:heroic'])
+assert(NR.MigrateNotePlans(251)==0)
+local ui=NR.UI
+ui.note:SetText('EncounterID:3492;Difficulty:Heroic;\nph:1;time:40;spellid:51271;');ui:Parse();ui:Save()
+function GetSpecializationInfo() return 252 end
+ui.note:SetText('EncounterID:3492;Difficulty:Heroic;\nph:1;time:50;spellid:42650;');ui:Parse();ui:Save()
+function GetSpecializationInfo() return 251 end
+ui.pausePlan.scripts.OnClick();assert(not NR.NotePlans(251).plans['3492:heroic'].enabled)
+assert(NR.NotePlans(252).plans['3492:heroic'].enabled)
+ui.rollback.scripts.OnClick();assert(NR.NotePlans(251).plans['3492:heroic'].rows[1].time==20)
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',3492,'',15)
+assert(#NR.engine.rows==1 and NR.engine.rows[1].spellID==51271)
+driver.scripts.OnEvent(driver,'ENCOUNTER_END')
+function GetSpecializationInfo() return 252 end
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',3492,'',15)
+assert(#NR.engine.rows==1 and NR.engine.rows[1].spellID==42650)
+''')
+
+    def test_recording_seek_preserves_manual_events_and_autoplay_finishes(self):
+        lua,nr=runtime(True);lua.globals().NR=nr;lua.globals().note=self.dungeon_note()
+        lua.execute(r'''
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local bundle=assert(NR.EventPlans.ParseDungeon(note))
+bundle.plans[2].rows[1].anchor='dog'
+NR.PreviewUI.referenceEvents=false
+assert(NR.PreviewUI:Open(bundle,2))
+local p=NR.preview
+assert(p.autoUse and p.video)
+p:Seek(10,0);p:Event('dog',0)
+assert(#p.actions==1)
+p:Seek(40,0);assert(p.engine.rows[1].used)
+p:Seek(0,0);assert(#p.actions==1 and not p.engine.rows[1].target)
+p:Tick(40);assert(p.engine.rows[1].used,'forward playback replays the recorded event')
+p:Seek(p.duration,40);assert(p.running and not p.playing and p.status=='播放结束')
+p:Resume(40);assert(p.position==0 and p.playing)
+p:Seek(5,40);p:Event('dog',40);assert(#p.actions==1 and p.actions[1].time==5,'editing past replaces future branch')
+assert(bundle.plans[2].rows[1].time==0 and not bundle.plans[2].rows[1].used)
+''')
 
     def test_import_visible_caret_tracks_native_position_blinks_and_cleans_up(self):
         lua,nr=runtime(True);lua.globals().NR=nr
@@ -124,7 +320,7 @@ editor:SetText('中文及长行\nEncounterID:3492;Difficulty:Heroic;\nph:1;time:
 editor.scripts.OnTextChanged(editor);assert(not caret:IsShown(),'do not guess a nonempty cursor position')
 editor.scripts.OnCursorChanged(editor,97,-600,1,18)
 assert(caret:IsShown() and caret.point[4]==97 and caret.point[5]==-600 and caret:GetHeight()==18)
-assert(editor.parent:GetVerticalScroll()==362)
+assert(editor.parent:GetVerticalScroll()==282)
 editor.scripts.OnCursorChanged(editor,115,-600,1,18)
 editor:SetText(editor:GetText()..'更多中文');editor.scripts.OnTextChanged(editor)
 assert(caret:IsShown() and caret.point[4]==115,'native cursor-before-text callbacks must keep the real insertion position')
@@ -140,14 +336,14 @@ assert(not editor:HasFocus() and not caret:IsShown() and not editor.scripts.OnUp
 editor:SetFocus();editor.scripts.OnCursorChanged(editor,{secret=true},-22,1,16)
 assert(not caret:IsShown() and not editor.scripts.OnUpdate)
 editor.scripts.OnCursorChanged(editor,23,-22,1,16);assert(caret:IsShown())
-assert(editor:GetText()==text and ui.encounter:GetText()=='' and not next(NR.db.plans))
+assert(editor:GetText()==text and ui.encounter:GetText()=='' and not next(NR.NotePlans(251).plans))
 ''')
 
     def test_shared_burst_catalog_all_specs_and_web_lua_scope_match(self):
         import subprocess
         check=subprocess.run(['python','tools/sync_spell_catalog.py','--check'],cwd=ROOT,capture_output=True,text=True,encoding='utf-8')
         self.assertEqual(check.returncode,0,check.stderr)
-        data=json.loads((ROOT/'web/burst-spells.json').read_text(encoding='utf-8'))
+        data=json.loads((ROOT/'data/burst-spells.json').read_text(encoding='utf-8'))
         lua,nr=runtime();lua.globals().NR=nr
         self.assertEqual(nr.SpellCatalog.dataVersion,data['dataVersion'])
         self.assertEqual(len(nr.SpellCatalog.spells),len(data['spells']))
@@ -161,7 +357,6 @@ assert(editor:GetText()==text and ui.encounter:GetText()=='' and not next(NR.db.
             entry=nr.SpellCatalog.Get(r['id'])
             self.assertEqual(entry.name,r['name'])
             self.assertEqual(entry.icon,'Interface\\Icons\\'+r['icon'])
-            self.assertTrue((ROOT/'web'/r['image']).is_file())
         self.assertIsNone(nr.SpellCatalog.Get(200166),'Havoc effect ID must not replace the cast ID')
         self.assertIsNone(nr.SpellCatalog.Get(1217607),'Devourer effect ID must not replace the cast ID')
         self.assertIsNone(nr.SpellCatalog.Get(442204),'Breath of Eons effect ID must not replace the cast ID')
@@ -170,8 +365,8 @@ assert(editor:GetText()==text and ui.encounter:GetText()=='' and not next(NR.db.
     def test_all_spec_builtin_selection_round_trips_and_cast_clears_reminder(self):
         import subprocess
         code=r"""
-import {SPECS,newDungeon,generateDungeon} from './web/plan.mjs';
-import {burstSpellsForSpec} from './web/spells.mjs';
+import {SPECS,newDungeon,generateDungeon} from './tests/fixtures/protocol/plan.mjs';
+import {burstSpellsForSpec} from './tests/fixtures/protocol/spells.mjs';
 const out=SPECS.map(s=>{const spell=burstSpellsForSpec(s.id)[0];const d=newDungeon(s.id);d.plans[0].rows=[{type:'spell',value:spell.id,anchor:'start',occurrence:1,time:5,window:10,hold:'',after:'ready'}];return {specID:s.id,spellID:spell.id,text:generateDungeon(d).text};});
 console.log(JSON.stringify(out));
 """
@@ -280,7 +475,7 @@ ui.notePanel.scripts.OnMouseDown(ui.notePanel,'LeftButton')
 assert(editor:HasFocus() and ui.noteFocus:GetText()=='正在输入' and not ui.noteHint:IsShown())
 assert(ui.notePanel.borderColor==NR.Theme.colors.ink)
 editor.scripts.OnCursorChanged(editor,4,-600,1,16)
-assert(scroll:GetVerticalScroll()==360 and editor:GetHeight()>=624,'caret must stay in the visible scroll area')
+assert(scroll:GetVerticalScroll()==280 and editor:GetHeight()>=624,'caret must stay in the visible scroll area')
 editor.scripts.OnCursorChanged(editor,4,0,1,16);assert(scroll:GetVerticalScroll()==0)
 ui.encounter:SetFocus();assert(not editor:HasFocus() and ui.noteFocus:GetText()=='点击输入')
 assert(ui.notePanel.borderColor==NR.Theme.colors.border)
@@ -316,6 +511,7 @@ NR.preview:Tick(11);assert(row.time:GetText()=='现在')
 assert(#voiceCalls==0,'visual countdown works with voice countdown disabled')
 NR.preview:Stop();assert(not row:IsShown())
 local events=NR.EventPlans.New(252,3101)
+NR.PreviewUI.referenceEvents=false
 assert(NR.PreviewUI:Open(events))
 assert(NR.Display.rows['event:1'].time:GetText()=='现在','opening time 0 is already due, lead does not delay it')
 assert(NR.Display.rows['event:2'].time:GetText()=='等待','unknown future event must not get a fake countdown')
@@ -331,12 +527,12 @@ NR.preview:Stop()
     @staticmethod
     def dungeon_note():
         import subprocess
-        code="import {newDungeon,newPlan,generateDungeon} from './web/plan.mjs';const d=newDungeon();d.plans[0]=newPlan();d.plans[3].rows=[{type:'spell',value:42650,anchor:'start',occurrence:1,time:0,window:10,hold:''}];process.stdout.write(generateDungeon(d).text);"
+        code="import {newDungeon,newPlan,generateDungeon} from './tests/fixtures/protocol/plan.mjs';const d=newDungeon();d.plans[0]=newPlan();d.plans[3].rows=[{type:'spell',value:42650,anchor:'start',occurrence:1,time:0,window:10,hold:''}];process.stdout.write(generateDungeon(d).text);"
         return subprocess.run(['node','--input-type=module','-e',code],cwd=ROOT,capture_output=True,text=True,encoding='utf-8',check=True).stdout
 
     def test_dungeon_catalog_matches_runtime_all_bosses_and_scopes(self):
         import subprocess
-        data=json.loads(subprocess.run(['node','--input-type=module','-e',"import {DUNGEONS} from './web/plan.mjs';console.log(JSON.stringify(DUNGEONS));"],cwd=ROOT,capture_output=True,text=True,encoding='utf-8',check=True).stdout)
+        data=json.loads(subprocess.run(['node','--input-type=module','-e',"import {DUNGEONS} from './tests/fixtures/protocol/plan.mjs';console.log(JSON.stringify(DUNGEONS));"],cwd=ROOT,capture_output=True,text=True,encoding='utf-8',check=True).stdout)
         lua,nr=runtime()
         self.assertEqual(len(data),8)
         ids=[]
@@ -377,12 +573,12 @@ local old=NR.EventPlans.New(252,3101);old.rows[2].time=7;assert(NR.EventPlans.Sa
 local omitted=NR.Copy(old);omitted.encounterID=3102;omitted.rows={omitted.rows[1]};assert(NR.EventPlans.Save(omitted))
 local other=NR.Copy(omitted);other.specID=251;assert(NR.EventPlans.Save(other))
 local hero=NR.Copy(omitted);hero.difficulty='heroic';assert(NR.EventPlans.Save(hero))
-NR.db.plans['3492:heroic']={unchanged=true}
+NR.NotePlans(251).plans['3492:heroic']={unchanged=true}
 local invalid=NR.Copy(b);invalid.plans[2].encounterID=3457
 assert(not NR.EventPlans.SaveDungeon(invalid));assert(NR.EventPlans.Get(252,3101,'mythic').rows[2].time==7)
 combat=true;assert(not NR.EventPlans.SaveDungeon(b));combat=false
 assert(NR.EventPlans.SaveDungeon(b));assert(not NR.EventPlans.Get(252,3102,'mythic'))
-assert(NR.EventPlans.Get(251,3102,'mythic') and NR.EventPlans.Get(252,3102,'heroic') and NR.db.plans['3492:heroic'].unchanged)
+assert(NR.EventPlans.Get(251,3102,'mythic') and NR.EventPlans.Get(252,3102,'heroic') and NR.NotePlans(251).plans['3492:heroic'].unchanged)
 assert(NR.EventPlans.OwnsDungeonEncounter(252,3102) and not NR.EventPlans.OwnsDungeonEncounter(251,3102))
 local last=NR.db.lastDungeon;assert(NR.EventPlans.PauseDungeon(last));assert(not NR.EventPlans.Get(252,3101,'mythic') and not NR.EventPlans.Get(252,3105,'mythic'))
 assert(NR.EventPlans.RollbackDungeon(last));assert(NR.EventPlans.Get(252,3101,'mythic').rows[2].time==7)
@@ -401,13 +597,13 @@ assert(not NR.EventPlans.RollbackDungeon({specID='bad'}))
 function GetSpecializationInfo() return 252 end
 local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
 NR.UI.note:SetText(note);NR.UI:Parse();assert(NR.UI.preview.kind=='dungeon')
-NR.UI:Play();assert(NR.preview.plan.encounterID==3101 and NR.PreviewUI.boss:IsShown())
-NR.PreviewUI.boss.scripts.OnClick();assert(NR.preview.plan.encounterID==3105)
-NR.PreviewUI.boss.scripts.OnClick();assert(NR.preview.plan.encounterID==3101)
+NR.UI:Play();assert(NR.preview.plan.encounterID==3101 and #NR.PreviewUI.entries==2)
+NR.PreviewUI.entryButtons[2].scripts.OnClick();assert(NR.preview.plan.encounterID==3105 and not NR.preview.playing)
+NR.PreviewUI.entryButtons[1].scripts.OnClick();assert(NR.preview.plan.encounterID==3101)
 NR.UI:Save();assert(NR.db.lastPlanKind=='dungeon' and NR.EventPlans.Get(252,3105,'mythic'))
-NR.db.plans['3101:mythic']=assert(NR.ParseNote('{time:00:00} - player {spell:51271}',{encounterID=3101}))
-NR.db.plans['3102:mythic']=assert(NR.ParseNote('{time:00:00} - player {spell:51271}',{encounterID=3102}))
-NR.db.plans['3101:mythic'].enabled=true;NR.db.plans['3102:mythic'].enabled=true
+NR.NotePlans(251).plans['3101:mythic']=assert(NR.ParseNote('{time:00:00} - player {spell:51271}',{encounterID=3101}))
+NR.NotePlans(251).plans['3102:mythic']=assert(NR.ParseNote('{time:00:00} - player {spell:51271}',{encounterID=3102}))
+NR.NotePlans(251).plans['3101:mythic'].enabled=true;NR.NotePlans(251).plans['3102:mythic'].enabled=true
 driver.scripts.OnEvent(driver,'ENCOUNTER_START',3101,'',8);assert(not NR.preview.running and #NR.engine.rows==4)
 driver.scripts.OnEvent(driver,'ENCOUNTER_END')
 driver.scripts.OnEvent(driver,'ENCOUNTER_START',3105,'',8);assert(#NR.engine.rows==1 and NR.engine.rows[1].spellID==42650)
@@ -421,7 +617,7 @@ function GetSpecializationInfo() return 251 end
 driver.scripts.OnEvent(driver,'ENCOUNTER_START',3101,'',8);assert(#NR.engine.rows==1 and NR.engine.rows[1].spellID==51271)
 driver.scripts.OnEvent(driver,'ENCOUNTER_END')
 function GetSpecializationInfo() return 252 end
-SlashCmdList.NEXTREMINDERS('preview');assert(NR.preview.plan.encounterID==3101 and NR.PreviewUI.selectedDungeon)
+SlashCmdList.NEXTREMINDERS('preview');assert(NR.preview.plan.encounterID==3101 and #NR.PreviewUI.entries==2)
 NR.preview:Stop();NR.PreviewUI.frame:Hide()
 NR.UI.note:SetText(note..'broken');NR.UI:Save();assert(NR.db.lastPlanKind=='dungeon')
 NR.UI:Parse();assert(not NR.UI.preview)
@@ -430,7 +626,7 @@ NR.UI.pausePlan.scripts.OnClick();assert(not NR.EventPlans.Get(252,3105,'mythic'
 
     def test_dungeon_all_catalog_bosses_load_without_special_event_definition(self):
         import subprocess
-        code="import {DUNGEONS,newDungeon,generateDungeon} from './web/plan.mjs';const notes=DUNGEONS.map(d=>{const p=newDungeon(252,d.id);for(const b of p.plans)b.rows=[{type:'spell',value:1233448,anchor:'start',occurrence:1,time:0,window:10,hold:'',after:'ready'}];return generateDungeon(p).text;});console.log(JSON.stringify(notes));"
+        code="import {DUNGEONS,newDungeon,generateDungeon} from './tests/fixtures/protocol/plan.mjs';const notes=DUNGEONS.map(d=>{const p=newDungeon(252,d.id);for(const b of p.plans)b.rows=[{type:'spell',value:1233448,anchor:'start',occurrence:1,time:0,window:10,hold:'',after:'ready'}];return generateDungeon(p).text;});console.log(JSON.stringify(notes));"
         notes=json.loads(subprocess.run(['node','--input-type=module','-e',code],cwd=ROOT,capture_output=True,text=True,encoding='utf-8',check=True).stdout)
         lua,nr=runtime(True);lua.globals().NR=nr
         lua.execute("function GetSpecializationInfo() return 252 end;created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')")
@@ -452,7 +648,7 @@ end
         import subprocess
         code=r"""
 import assert from 'node:assert/strict';
-import {SPECS,newDungeon,generateDungeon,validateDungeon} from './web/plan.mjs';
+import {SPECS,newDungeon,generateDungeon,validateDungeon} from './tests/fixtures/protocol/plan.mjs';
 for(const spec of SPECS){
   const empty=newDungeon(spec.id);assert(validateDungeon(empty,true));
   assert(empty.plans.every(p=>p.rows.length===0),'new drafts must not impose a spec strategy');
@@ -471,39 +667,44 @@ console.log('empty defaults / selected boss / validation / snapshot PASS');
         r=subprocess.run(['node','--input-type=module','-e',code],cwd=ROOT,capture_output=True,text=True,encoding='utf-8')
         self.assertEqual(r.returncode,0,r.stderr)
 
-    def test_redesigned_website_preserves_saved_and_legacy_drafts(self):
-        import subprocess
-        code=r"""
-import assert from 'node:assert/strict';
-import {newDungeon,generateDungeon} from './web/plan.mjs';
-import {loadDraft,saveDraft,draftKey,lastContext,rememberContext} from './web/drafts.mjs';
-const data=new Map();const storage={getItem:k=>data.get(k)||null,setItem:(k,v)=>data.set(k,v)};
-const old=newDungeon(252,2813);
-old.plans[0].rows=[{type:'spell',value:42650,anchor:'vuln',occurrence:1,time:3,window:10,hold:'等易伤',after:'ready'}];
-old.plans[3].rows=[{type:'slot',value:13,anchor:'dog',occurrence:1,time:0,window:10,hold:''}];
-data.set(draftKey(252,2813),JSON.stringify(old));
-const restored=loadDraft(storage,252,2813);assert.deepEqual(restored,old);
-assert.equal(generateDungeon(restored).bundle.plans.length,2);
-restored.plans[0].rows[0].time=4;assert.equal(JSON.parse(data.get(draftKey(252,2813))).plans[0].rows[0].time,3);
-saveDraft(storage,restored);assert.equal(loadDraft(storage,252,2813).plans[0].rows[0].time,4);
-assert(loadDraft(storage,251,2813).plans.every(p=>p.rows.length===0));
-const bad=structuredClone(old);bad.plans[0].rows[0].time=-1;assert.throws(()=>saveDraft(storage,bad));
-assert.equal(loadDraft(storage,252,2813).plans[0].rows[0].time,4,'failed validation preserves saved draft');
-data.set(draftKey(251,2813),JSON.stringify(old));assert(loadDraft(storage,251,2813).plans.every(p=>!p.rows.length),'wrong context cannot load');
-data.delete(draftKey(252,2813));data.set('nr-plan:252:3101:mythic',JSON.stringify(old.plans[0]));
-const migrated=loadDraft(storage,252,2813);assert.deepEqual(migrated.plans[0].rows,old.plans[0].rows);
-assert(data.has('nr-plan:252:3101:mythic'),'migration does not erase old data');
-assert(migrated.plans.slice(1).every(p=>!p.rows.length));
-data.set(draftKey(252,2813),'broken');assert(loadDraft(storage,252,2813).plans.every(p=>!p.rows.length));
-const unavailable={getItem(){throw Error('unavailable')},setItem(){throw Error('quota')}};
-assert(loadDraft(unavailable,252,2813).plans.every(p=>!p.rows.length));assert.throws(()=>saveDraft(unavailable,old),/quota/);
-assert.deepEqual(lastContext(storage),{specID:252,dungeonID:2813});rememberContext(storage,{specID:251,dungeonID:2993});
-assert.deepEqual(lastContext(storage),{specID:251,dungeonID:2993});
-data.set('nr-last-context',JSON.stringify({specID:0,dungeonID:0}));assert.deepEqual(lastContext(storage),{specID:252,dungeonID:2813});
-console.log('saved drafts, migration, context isolation and storage failures PASS');
-"""
-        r=subprocess.run(['node','--input-type=module','-e',code],cwd=ROOT,capture_output=True,text=True,encoding='utf-8')
-        self.assertEqual(r.returncode,0,r.stderr)
+    def test_unavailable_opener_waits_and_repeats_without_initial_cast(self):
+        lua,nr=runtime();lua.globals().NR=nr
+        lua.execute(r'''
+local state='cooling'
+local shown=0
+local e=NR.Engine.New(function(k) if k=='show' then shown=shown+1 end end,nil,function()return state end)
+local p=NR.EventPlans.New(252,3101)
+p.rows={{id=1,spellID=42650,anchor='start',occurrence=1,time=0,window=10}}
+e:Begin(3101,'mythic',nil,{},0,{specID=252},p)
+assert(shown==0 and e.readyWatches['event:1'].waiting)
+e:Tick(60);assert(shown==0,'opening wait must survive the original window')
+state=nil;e:CooldownUpdate(61);assert(shown==0,'unknown does not mean ready')
+state='ready';e:Tick(80);assert(shown==1 and e.rows[1].target==80)
+e:Tick(81);assert(shown==1)
+e:Cast(42650,82);state='cooling';e:CooldownUpdate(83)
+state='ready';e:Tick(140);assert(shown==2 and e.rows[1].target==140)
+e:Stop();e:Tick(200);assert(shown==2)
+assert(p.rows[1].after==nil,'runtime defaults do not mutate the saved plan')
+''')
+
+    def test_phase_cooldown_skips_occurrence_and_does_not_late_replay(self):
+        lua,nr=runtime();lua.globals().NR=nr
+        lua.execute(r'''
+local state='cooling';local shown=0
+local e=NR.Engine.New(function(k)if k=='show' then shown=shown+1 end end,nil,function()return state end)
+local p=NR.EventPlans.New(252,3101)
+p.rows={{id=1,spellID=42650,anchor='vuln',every=true,time=0,window=10}}
+e:Begin(3101,'mythic',nil,{},0,{specID=252},p)
+e:BossEvent({key='vuln',count=1,at=30},30)
+assert(shown==0 and e.rows[1].done)
+state='ready';e:Tick(31)
+e:BossEvent({key='vuln',count=1,at=30.2},31)
+assert(shown==0,'same occurrence must not replay after cooldown finishes')
+e:BossEvent({key='vuln',count=2,at=60},60);assert(shown==1)
+state='cooling';e:CooldownUpdate(61)
+assert(not e.rows[1].shown,'already visible reminder is hidden during cooldown')
+state='ready';e:Tick(62);assert(shown==1)
+''')
 
     def test_ready_event_order_gcd_only_and_late_anchor_correction(self):
         lua,nr=runtime();lua.globals().NR=nr
@@ -592,7 +793,7 @@ assert(NR.Ready.State({secret=true})==nil)
 
     def test_after_ready_codec_rejects_old_version_and_bad_combinations(self):
         import subprocess
-        code="import {newPlan,exportPlan} from './web/plan.mjs';process.stdout.write(exportPlan(newPlan()));"
+        code="import {newPlan,exportPlan} from './tests/fixtures/protocol/plan.mjs';process.stdout.write(exportPlan(newPlan()));"
         r=subprocess.run(['node','--input-type=module','-e',code],cwd=ROOT,capture_output=True,text=True,encoding='utf-8',check=True)
         lua,nr=runtime();lua.globals().NR=nr;lua.globals().note=r.stdout
         lua.execute(r'''
@@ -636,28 +837,10 @@ driver.scripts.OnEvent(driver,'ENCOUNTER_END');NR.UI.enableButton.scripts.OnClic
 driver.scripts.OnEvent(driver,'ENCOUNTER_START',3101,'',8);assert(#NR.engine.rows==4)
 assert(not NR.EventPlans.Get(nil,nil,nil));assert(not NR.EventPlans.Rollback({specID='broken'}))
 ''')
-    def test_local_web_server_module_mime_and_bounded_cli_adapter(self):
-        import importlib.util
-        from unittest.mock import patch
-        from types import SimpleNamespace
-        spec=importlib.util.spec_from_file_location('nr_web',ROOT/'tools/web_server.py')
-        mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)
-        self.assertEqual(mod.Handler.extensions_map['.mjs'],'text/javascript')
-        self.assertEqual(mod.Handler.extensions_map['.webp'],'image/webp')
-        self.assertEqual(mod.Handler.extensions_map['.png'],'image/png')
-        request=dict(mode='top',boss=3492,className='Mage',specName='Fire',rank=1,difficulty=4,rankingID=1234)
-        with patch.object(mod.subprocess,'run',return_value=SimpleNamespace(returncode=0,stdout='note',stderr='')) as run:
-            self.assertEqual(mod.read_wcl(request),{'note':'note'})
-            args=run.call_args.args[0]
-            self.assertIn('--ranking-id',args);self.assertIn('1234',args);self.assertIn('3492',args)
-            self.assertFalse(run.call_args.kwargs.get('shell',False))
-        for change in (dict(boss=0),dict(mode='shell'),dict(className='Mage;cmd'),dict(spells='1;cmd'),dict(rank=21)):
-            with self.assertRaises(ValueError):mod.read_wcl({**request,**change})
-
     def test_web_exports_round_trip_real_lua_and_refuse_lossy_conversion(self):
         import subprocess
         code=r'''
-import {SPECS,newPlan,exportPlan} from './web/plan.mjs';
+import {SPECS,newPlan,exportPlan} from './tests/fixtures/protocol/plan.mjs';
 import assert from 'node:assert/strict';
 assert.equal(SPECS.length,40);assert.equal(new Set(SPECS.map(s=>s.id)).size,40);
 const p=newPlan();p.rows[1].hold='留着;等%易伤\n第二行';
@@ -757,6 +940,7 @@ local text='NRPlan:1;EncounterID:3101;Difficulty:mythic;SpecID:252;Name:Test;\na
 NR.UI.note:SetText(text);NR.UI:Parse();assert(NR.UI.preview.kind=='events')
 local settings=NR.Copy(NR.db.settings);NR.UI:Save();assert(NR.EventPlans.Get(252,3101,'mythic'))
 assert(NR.db.settings.lead==settings.lead and NR.db.settings.glow==settings.glow)
+NR.PreviewUI.referenceEvents=false
 assert(NR.PreviewUI:Open(NR.UI.preview));assert(NR.preview.engine.rows[1].held)
 assert(NR.preview:Event('vuln',0));assert(NR.preview.engine.rows[1].target==1.7)
 NR.preview:Seek(0,0);assert(NR.preview.engine.rows[1].target==1.7)
@@ -806,7 +990,7 @@ assert(NR.db.settings.lead==7 and NR.db.settings.volume==65 and NR.db.settings.g
 combat=true; ui.lead:SetText("9"); ui.saveSettings.scripts.OnClick(); assert(NR.db.settings.lead==7)
 combat=false; ui.importTab.scripts.OnClick()
 assert(ui.note:GetText()==text and ui.preview==plan and ui.importPage:IsShown() and not ui.settingsPage:IsShown())
-ui.saveButton.scripts.OnClick(); assert(NR.db.plans["3492:mythic"].enabled)
+ui.saveButton.scripts.OnClick(); assert(NR.NotePlans(251).plans["3492:mythic"].enabled)
 ui.note:SetText("bad"); ui:Parse(); assert(not ui.bindingScroll:IsShown() and not ui.bindingTitle:IsShown())
 ''')
 
@@ -870,14 +1054,14 @@ assert(#live.rows==0, "manual rehearsal must not silently enable an unsupported 
 local driver=created[1]; driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
 local text="EncounterID:3492;Difficulty:Heroic;\nph:1;time:135.5;spellid:51271;\nph:1;time:300;spellid:152279;"
 NR.UI.note:SetText(text); NR.UI:Parse(); NR.UI:Save()
-local saved=NR.db.plans["3492:heroic"]
+local saved=NR.NotePlans(251).plans["3492:heroic"]
 NR.UI.playPreview.scripts.OnClick(); assert(NR.PreviewUI.frame:IsShown() and NR.preview.running)
 assert(not NR.engine.active and #NR.engine.trace==0)
-NR.PreviewUI.seek:SetText("130.5"); NR.PreviewUI.jump.scripts.OnClick()
+assert(NR.preview:Seek(130.5,now));NR.PreviewUI:Update()
 assert(NR.Display.rows[1].label:GetText():find("预览",1,true))
 assert(NR.Display.previewMode and NR.Display.container.point[1]=="TOP")
 NR.PreviewUI.rows[1].use.scripts.OnClick(); assert(NR.preview.engine.rows[1].done)
-assert(NR.db.plans["3492:heroic"]==saved and saved.rows[1].time==135.5 and not saved.rows[1].done)
+assert(NR.NotePlans(251).plans["3492:heroic"]==saved and saved.rows[1].time==135.5 and not saved.rows[1].done)
 now=1000; driver.scripts.OnEvent(driver,"ENCOUNTER_START",3492,"Ulatek",15)
 assert(not NR.preview.running and not NR.PreviewUI.frame:IsShown() and NR.engine.active)
 assert(not NR.Display.previewMode and NR.Display.container.point[1]=="CENTER")
@@ -900,7 +1084,7 @@ local text="EncounterID:9999;Difficulty:Heroic;\nph:2;time:3;spellid:152279;"
 NR.UI.note:SetText(text); NR.UI:Parse(); NR.UI.note:SetText(text.."\n")
 NR.UI:Play(); assert(not NR.preview.running)
 NR.UI:Parse(); NR.UI:Play(); assert(NR.preview.running)
-NR.PreviewUI.phase.scripts.OnClick(); assert(NR.preview.engine.rows[1].target==3)
+NR.PreviewUI.phase.scripts.OnClick(); assert(NR.preview.position==15 and NR.preview.engine.rows[1].target==18)
 NR.PreviewUI.frame:Hide(); assert(not NR.preview.running and not NR.Display.rows[1]:IsShown())
 local plan=NR.ParseNote("EncounterID:3492;Difficulty:Heroic;\nph:1;time:0;spellid:51271;")
 for i=2,500 do plan.rows[i]={id=i,phase=1,time=i,spellID=51271,tag="player"} end
@@ -914,7 +1098,7 @@ for i=2,10 do multi=multi.."ph:"..i..";time:3;spellid:51271;\n" end
 NR.UI.note:SetText(multi); NR.UI:Parse(); NR.UI:Play()
 assert(NR.preview.running and #NR.preview.engine.rows==9)
 assert(#NR.UI.binders==9 and NR.UI.bindingContent:GetHeight()==360)
-NR.UI:Save(); assert(not NR.db.plans["9999:heroic"])
+NR.UI:Save(); assert(not NR.NotePlans(251).plans["9999:heroic"])
 ''')
 
     def test_preview_finishes_and_restarts_without_saved_changes(self):
@@ -923,13 +1107,13 @@ NR.UI:Save(); assert(not NR.db.plans["9999:heroic"])
 created[1].scripts.OnEvent(created[1],"ADDON_LOADED","NextReminders")
 local plan=NR.ParseNote("EncounterID:3492;Difficulty:Heroic;\nph:1;time:5;spellid:51271;")
 assert(NR.PreviewUI:Open(plan))
-now=16; created[1].scripts.OnUpdate(created[1],0.1)
-assert(not NR.preview.running and NR.preview.status=="播放结束")
+now=60; created[1].scripts.OnUpdate(created[1],0.1)
+assert(NR.preview.running and not NR.preview.playing and NR.preview.status=="播放结束")
 assert(not NR.Display.rows[1]:IsShown())
 NR.PreviewUI.play.scripts.OnClick(); assert(NR.preview.running and NR.preview.position==0)
 assert(NR.Display.rows[1]:IsShown())
-NR.PreviewUI.stop.scripts.OnClick(); assert(not NR.preview.running and not NR.Display.rows[1]:IsShown())
-assert(next(NR.db.plans)==nil)
+NR.PreviewUI.frame:Hide(); assert(not NR.preview.running and not NR.Display.rows[1]:IsShown())
+assert(next(NR.NotePlans(251).plans)==nil)
 ''')
 
     def test_independent_boss_data_contract(self):
@@ -992,12 +1176,12 @@ staged.phaseBindings[2]="pull"; assert(NR.ValidateBindings(staged))
 local driver=created[1]; driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
 local note="EncounterID:3492;Difficulty:Mythic;\nph:1;time:145.5;spellid:51271;"
 NR.UI.note:SetText(note); NR.UI:Parse(); NR.UI:Save()
-local original=NR.db.plans["3492:mythic"]
+local original=NR.NotePlans(251).plans["3492:mythic"]
 NR.UI.difficultyButton.scripts.OnClick(NR.UI.difficultyButton)
 assert(NR.UI.difficulty=="heroic")
 NR.UI:Parse(); NR.UI:Save()
-assert(NR.db.plans["3492:mythic"]==original)
-assert(NR.db.plans["3492:heroic"].sourceDifficulty=="mythic")
+assert(NR.NotePlans(251).plans["3492:mythic"]==original)
+assert(NR.NotePlans(251).plans["3492:heroic"].sourceDifficulty=="mythic")
 assert(NR.UI.summary:GetText():find("来源",1,true))
 now=100; driver.scripts.OnEvent(driver,"ENCOUNTER_START",3492,"Ulatek",15)
 assert(#NR.engine.rows==1 and NR.engine.rows[1].target==245.5)
@@ -1006,7 +1190,7 @@ driver.scripts.OnEvent(driver,"ENCOUNTER_END")
 driver.scripts.OnEvent(driver,"ENCOUNTER_START",3492,"Ulatek",14)
 assert(#NR.engine.rows==0)
 NR.UI:Parse(); NR.UI.difficulty="normal"; NR.UI:Save()
-assert(not NR.db.plans["3492:normal"])
+assert(not NR.NotePlans(251).plans["3492:normal"])
 ''')
 
     def test_demo_command_uses_real_scheduler_and_cleans_up(self):
@@ -1018,7 +1202,7 @@ now=100; SlashCmdList.NEXTREMINDERS("test")
 assert(NR.preview.running and #NR.preview.engine.rows==1 and NR.preview.engine.rows[1].shown)
 assert(not NR.engine.active and #NR.engine.trace==0, "demo must not alter the live engine")
 assert(NR.Display.rows[1]:IsShown() and #voiceCalls>0)
-assert(next(NR.db.plans)==nil, "demo must not create a saved boss plan")
+assert(next(NR.NotePlans(251).plans)==nil, "demo must not create a saved boss plan")
 now=102.1; driver.scripts.OnUpdate(driver,0.1); assert(voiceCalls[#voiceCalls]=="3")
 driver.scripts.OnEvent(driver,"UNIT_SPELLCAST_SUCCEEDED","player","cast",{secret=true})
 assert(not NR.preview.engine.rows[1].done)
@@ -1040,7 +1224,7 @@ local a,b=NR.UI.binders[1],NR.UI.binders[2]
 a.scripts.OnClick(a); a.scripts.OnClick(a)
 b.scripts.OnClick(b); b.scripts.OnClick(b); b.scripts.OnClick(b)
 assert(NR.UI.preview.phaseBindings[2]==2 and NR.UI.preview.phaseBindings[3]==3)
-NR.UI:Save(); assert(NR.db.plans["3101:mythic"].phaseBindings[3]==3)
+NR.UI:Save(); assert(NR.NotePlans(251).plans["3101:mythic"].phaseBindings[3]==3)
 local count=#created; NR.UI:Parse()
 assert(#created==count and NR.UI.binders[1]==a and NR.UI.binders[2]==b)
 assert(not NR.UI.preview.phaseBindings[2] and not NR.UI.preview.phaseBindings[3])
@@ -1209,9 +1393,9 @@ local driver=created[1]
 driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
 NR.UI.note:SetText("EncounterID:3492;Difficulty:Heroic;\nph:1;time:10;spellid:51271;")
 NR.UI:Refresh(); NR.UI:Parse(); NR.UI:Save()
-assert(NR.db.plans["3492:heroic"].enabled)
+assert(NR.NotePlans(251).plans["3492:heroic"].enabled)
 combat=true; NR.UI.note:SetText("bad"); NR.UI:Parse()
-assert(NR.db.plans["3492:heroic"].rows[1].time==10)
+assert(NR.NotePlans(251).plans["3492:heroic"].rows[1].time==10)
 now=100; driver.scripts.OnEvent(driver,"ENCOUNTER_START",3492,"Ulatek",15)
 now=105; driver.scripts.OnUpdate(driver,0.1); assert(NR.engine.rows[1].shown)
 driver.scripts.OnEvent(driver,"UNIT_SPELLCAST_SUCCEEDED","player","cast",51271)
@@ -1219,7 +1403,7 @@ assert(NR.engine.rows[1].done)
 driver.scripts.OnEvent(driver,"ENCOUNTER_END"); assert(not NR.engine.active)
 combat=false
 NR.UI.note:SetText("{time:00:10} - X {spell:51271}"); NR.UI.encounter:SetText("3492"); NR.UI:Parse()
-NR.UI.encounter:SetText("3105"); NR.UI:Save(); assert(not NR.db.plans["3105:mythic"])
+NR.UI.encounter:SetText("3105"); NR.UI:Save(); assert(not NR.NotePlans(251).plans["3105:mythic"])
 ''')
 
     def test_wcl_tool_output_imports_as_pull_relative_plan(self):
@@ -1239,6 +1423,39 @@ local plan=assert(NR.ParseNote(note))
 assert(plan.encounterID==3101 and plan.difficulty=="mythic" and plan.format=="NSRT" and #plan.rows==2)
 assert(plan.rows[1].time==3.2 and plan.rows[1].spellID==51271 and plan.rows[1].tag=="XmdaY")
 assert(plan.rows[2].time==90.3 and NR.ValidateBindings(plan))
+''')
+
+    def test_import_flow_gates_actions_on_checked_text_and_sub_page_navigation(self):
+        lua,nr=runtime(True); lua.globals().NR=nr
+        lua.execute(r'''
+created[1].scripts.OnEvent(created[1],"ADDON_LOADED","NextReminders")
+local ui=NR.UI; ui.frame:Show()
+assert(ui.status.text:GetText()=="待检查" and not ui.saveButton.themeEnabled and not ui.playPreview.themeEnabled)
+assert(not ui.noteOptions:IsShown(),"empty box shows no Lorrgs options")
+local text="EncounterID:3492;Difficulty:Mythic;\nph:1;time:20;spellid:51271;"
+ui.note:SetText(text); ui.note.scripts.OnTextChanged(ui.note)
+assert(ui.noteOptions:IsShown() and ui.formatLabel:GetText():find("Lorrgs"))
+ui.checkButton.scripts.OnClick()
+assert(ui.status.text:GetText()=="检查通过" and ui.saveButton.themeEnabled and ui.playPreview.themeEnabled)
+ui.note:SetText(text.."\nph:1;time:30;spellid:51271;"); ui.note.scripts.OnTextChanged(ui.note)
+assert(ui.status.text:GetText()=="需重新检查" and not ui.saveButton.themeEnabled and not ui.playPreview.themeEnabled)
+ui:Parse(); ui.saveButton.scripts.OnClick()
+assert(NR.NotePlans(251).plans["3492:mythic"].enabled and ui.status.text:GetText()=="已保存并启用")
+assert(not ui.saveButton.themeEnabled,"saving the same check twice would overwrite the backup with itself")
+ui.note:SetText("bad"); ui:Parse(); assert(ui.status.text:GetText()=="未通过")
+ui.note:SetText("NRDungeon:x"); ui.note.scripts.OnTextChanged(ui.note); assert(not ui.noteOptions:IsShown())
+ui.note:SetText(""); ui.note.scripts.OnTextChanged(ui.note); assert(ui.status.text:GetText()=="待检查")
+ui:SetPage("settings"); ui.lead:SetText("9"); ui.lead.scripts.OnTextChanged(ui.lead,true)
+assert(ui.message:GetText():find("未保存"))
+ui.burstButton.scripts.OnClick()
+assert(not ui.tabs:IsShown() and not ui.settingsPage:IsShown() and NR.BurstUI.frame:IsShown())
+NR.BurstUI.backButton.scripts.OnClick()
+assert(ui.tabs:IsShown() and ui.settingsPage:IsShown() and ui.lead:GetText()=="9")
+ui.saveSettings.scripts.OnClick(); assert(NR.db.settings.lead==9 and not ui.settingsDirty)
+ui.burstButton.scripts.OnClick(); ui.frame:Hide(); ui.frame:Show()
+assert(not NR.BurstUI.frame:IsShown() and ui.tabs:IsShown() and ui.settingsPage:IsShown(),"closing on a sub page reopens a usable page")
+assert(NR.PreviewUI:OpenLibrary()); ui.enableButton.scripts.OnClick()
+assert(NR.db.enabled==false and ui.switches[2]:GetText()=="提醒已停用","both windows show the same master switch")
 ''')
 
     def test_text_is_not_covered_by_sibling_panels(self):
@@ -1274,41 +1491,40 @@ NR.UI:SetPage("import"); assert(NR.UI.message.text:find("Lorrgs"))
 local driver=created[1];driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
 local plan=NR.ParseNote("EncounterID:3492;Difficulty:Heroic;\nph:1;time:5;spellid:51271;\nph:1;time:100;spellid:47568;")
 now=0;local ok,err=NR.PreviewUI:Open(plan);assert(ok,tostring(err));NR.preview:Stop();NR.PreviewUI.lastUpdate=nil;NR.PreviewUI:Update()
-local tl=NR.PreviewUI.timeline;assert(NR.PreviewUI.span==60,tostring(NR.PreviewUI.span))
+local tl=NR.PreviewUI.timeline;assert(NR.PreviewUI.span==115,tostring(NR.PreviewUI.span))
 tl.GetLeft=function()return 100 end;tl.GetEffectiveScale=function()return 1 end
-GetCursorPosition=function()return 100+24+944/2,0 end
+GetCursorPosition=function()return 100+24+748/2,0 end
 tl.scripts.OnMouseDown(tl,"LeftButton")
-assert(NR.preview.running and math.abs(NR.preview.position-30)<0.1,tostring(NR.preview.running)..' '..tostring(NR.preview.position)..' '..tostring(NR.PreviewUI.message:GetText()))
+assert(NR.preview.running and math.abs(NR.preview.position-57.5)<0.1,tostring(NR.preview.running)..' '..tostring(NR.preview.position)..' '..tostring(NR.PreviewUI.message:GetText()))
 local row=NR.Display:Row(99);assert(row.backdropColor[4]<=0.2 and not rawget(row,"nrFill"),'reminder bar keeps the old see-through look')
 ''')
 
-    def test_cleanup_on_close_and_fight_end_waits_for_combat_and_stops_voice(self):
+    def test_cleanup_stops_voice_and_waits_for_combat_without_forcing_gc(self):
         lua,nr=runtime(True); lua.globals().NR=nr
         lua.execute(r'''
-local collected,stopped,mem=0,{},300
-collectgarbage=function(what) if what=="collect" then collected=collected+1;mem=120 end return 0 end
-UpdateAddOnMemoryUsage=function() end
-GetAddOnMemoryUsage=function(name) assert(name=="NextReminders");return mem end
+local stopped={}
+collectgarbage=function() error("must not force garbage collection") end
+UpdateAddOnMemoryUsage=function() error("must not scan addon memory") end
 StopSound=function(h) stopped[#stopped+1]=h end
 PlaySoundFile=function() return true,77 end
 C_VoiceChat.StopSpeakingText=function() stopped[#stopped+1]="tts" end
 local driver=created[1];driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
 NR.db.settings=NR.Settings({sound=true})
 now=10;NR.Display:Emit("show",{id=1,spellID=42650,target=10},0)
--- Closing the window stops the clip that is still playing and collects garbage.
+-- Closing the window stops the clip that is still playing without forcing garbage collection.
 NR.UI.frame:Show();NR.UI.frame:Hide()
-assert(collected==1 and stopped[1]==77 and stopped[2]=="tts" and NR.lastCleanup=="close")
+assert(stopped[1]==77 and stopped[2]=="tts" and NR.lastCleanup=="close")
 assert(not NR.Display.rows[1]:IsShown())
 -- In combat it waits, then runs once combat ends.
-combat=true;local ok,err=NR.Cleanup("manual");assert(not ok and err:find("脱战") and collected==1)
-combat=false;driver.scripts.OnEvent(driver,"PLAYER_REGEN_ENABLED");assert(collected==2 and not NR.cleanupPending)
+combat=true;local ok,err=NR.Cleanup("close");assert(not ok and err:find("脱战"))
+combat=false;driver.scripts.OnEvent(driver,"PLAYER_REGEN_ENABLED");assert(not NR.cleanupPending)
 -- Fight end: cleaned when it is already out of combat; a rehearsal in progress is left alone.
-driver.scripts.OnEvent(driver,"ENCOUNTER_END");assert(collected==3 and NR.lastCleanup=="encounter")
-NR.preview.running=true;assert(not NR.Cleanup("manual") and collected==3);NR.preview.running=false
--- Settings card button shows before and after.
-mem=300;NR.UI.frame:Show();NR.UI:SetPage("settings");NR.UI.cleanButton.scripts.OnClick()
-assert(NR.UI.memoryLabel:GetText()=="300 KB → 120 KB",NR.UI.memoryLabel:GetText())
-SlashCmdList.NEXTREMINDERS("gc");assert(messages[#messages]:find("KB"))
+driver.scripts.OnEvent(driver,"ENCOUNTER_END");assert(NR.lastCleanup=="encounter")
+NR.preview.running=true;assert(not NR.Cleanup("close"));NR.preview.running=false
+-- Memory controls and memory accounting are removed.
+NR.UI.frame:Show();NR.UI:SetPage("settings")
+assert(NR.UI.cleanButton==nil and NR.UI.memoryLabel==nil and NR.MemoryKB==nil)
+SlashCmdList.NEXTREMINDERS("gc")
 ''')
 
     def test_fractional_lorrgs_phases_and_bigwigs_stage_bindings(self):
@@ -1398,10 +1614,10 @@ assert(handlers.BigWigs_SetStage and handlers.BigWigs_OnBossEngage)
 NR.UI.note:SetText("EncounterID:3470;Difficulty:Mythic;\nph:1.5;time:3;tag:everyone;spellid:51271;\nph:1.75;time:2;tag:everyone;spellid:152279;")
 NR.UI:Parse()
 assert(NR.UI.binders[1]:GetText():find("BigWigs") and NR.UI.binders[2]:GetText():find("未绑定"))
-NR.UI:Save(); assert(not NR.db.plans["3470:mythic"], "unbound 1.75 must block save")
+NR.UI:Save(); assert(not NR.NotePlans(251).plans["3470:mythic"], "unbound 1.75 must block save")
 local box=NR.UI.fallbacks[2]; box:SetText("1:40"); box.scripts.OnTextChanged(box)
 assert(NR.UI.preview.phaseBindings[1.75]=="time" and NR.UI.preview.phaseFallback[1.75]==100)
-NR.UI:Save(); assert(NR.db.plans["3470:mythic"].phaseFallback[1.75]==100)
+NR.UI:Save(); assert(NR.NotePlans(251).plans["3470:mythic"].phaseFallback[1.75]==100)
 local module={GetEncounterID=function() return 3470 end}
 local other={GetEncounterID=function() return 9999 end}
 now=10; driver.scripts.OnEvent(driver,"ENCOUNTER_START",3470,"Nekzali",16)
@@ -1414,6 +1630,228 @@ driver.scripts.OnEvent(driver,"ENCOUNTER_END")
 NR.UI:Parse(); assert(NR.UI.fallbacks[2]:GetText()=="m:ss")
 """)
 
+
+    def test_panel_back_navigation_preserves_settings_and_origin(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r"""
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local main,preview=NR.UI,NR.PreviewUI
+main.frame:Show();main:SetPage('settings');main.lead:SetText('17')
+main.burstButton.scripts.OnClick()
+assert(NR.BurstUI.backButton:GetText()=='返回提醒设置')
+NR.BurstUI.backButton.scripts.OnClick()
+assert(not NR.BurstUI.frame:IsShown() and main.page=='settings' and main.lead:GetText()=='17')
+assert(main:PageHint():find('即时保存'))
+assert(preview:OpenLibrary())
+assert(preview.backButton:GetText()=='返回提醒设置' and not main.frame:IsShown())
+assert(preview:OpenLibrary(),'refresh library must retain origin')
+preview.backButton.scripts.OnClick()
+assert(main.frame:IsShown() and main.page=='settings' and main.lead:GetText()=='17')
+assert(not preview.frame:IsShown() and not NR.preview.running)
+main:SetPage('import');assert(preview:OpenLibrary())
+assert(preview.backButton:GetText()=='返回方案导入')
+preview.backButton.scripts.OnClick();assert(main.page=='import')
+main:SetPage('settings');main.burstButton.scripts.OnClick();main:SetPage('import')
+assert(not NR.BurstUI.frame:IsShown(),'changing main page closes child editor')
+""")
+
+    def test_import_filters_deleted_default_bursts_for_text_and_preview(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r"""
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local ui=NR.UI
+local text='EncounterID:3492;Difficulty:Mythic;\nph:1;time:10;spellid:51271;\nph:1;time:20;spellid:47568;\nph:1;time:30;spellid:51271;'
+ui.note:SetText(text);ui:Parse();assert(#ui.preview.rows==3)
+ui:Save();assert(#NR.NotePlans(251).plans['3492:mythic'].rows==3)
+assert(NR.BurstSpells.Save(251,{439843}))
+assert(#NR.NotePlans(251).plans['3492:mythic'].rows==3,'saved plans are not changed')
+ui:Parse();assert(#ui.preview.rows==1 and ui.preview.rows[1].spellID==47568)
+ui:Play();assert(#NR.preview.plan.rows==1 and NR.preview.plan.rows[1].spellID==47568)
+ui:Save();assert(#NR.NotePlans(251).plans['3492:mythic'].rows==1)
+assert(ui.message:GetText():find('已按你的爆发名单跳过 2 条提醒',1,true))
+assert(NR.BurstSpells.Save(251,{}))
+ui:Parse();assert(#ui.preview.rows==1 and ui.preview.rows[1].spellID==47568)
+ui:Save();assert(ui.message:GetText():find('已按你的爆发名单跳过 2 条提醒',1,true))
+local mrt='{time:00:10} - player {spell:51271}\n{time:00:20} - player {spell:47568}'
+ui.encounter:SetText('3492');ui.note:SetText(mrt);ui:Parse()
+assert(#ui.preview.rows==1 and ui.preview.rows[1].spellID==47568)
+ui:Save();assert(ui.message:GetText():find('已按你的爆发名单跳过 1 条提醒',1,true))
+ui.note:SetText('EncounterID:3492;Difficulty:Mythic;\nph:1;time:10;spellid:51271;')
+ui:Parse();assert(not ui.preview);ui:Save()
+assert(#NR.NotePlans(251).plans['3492:mythic'].rows==1)
+assert(NR.BurstSpells.Reset(251))
+ui.note:SetText(text);ui:Parse();assert(#ui.preview.rows==3)
+ui:Save();assert(#NR.NotePlans(251).plans['3492:mythic'].rows==3)
+""")
+
+    def test_import_filters_dungeon_and_event_actions_atomically(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r"""
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local ui=NR.UI
+local header='NRDungeon:1;DungeonID:2813;Difficulty:mythic;SpecID:252;\n'
+local first='NRPlan:2;EncounterID:3101;Difficulty:mythic;SpecID:252;\n'
+local second='NRPlan:2;EncounterID:3105;Difficulty:mythic;SpecID:252;\n'
+local base='anchor:start;occurrence:1;time:0;window:10;'
+local spell=base..'spellid:42650;\n'
+local extra=base..'spellid:999991;\n'
+local item=base..'itemid:42650;\n'
+local slot=base..'slot:13;\n'
+local label=base..'text:hello;\n'
+local text=header..first..spell..extra..item..slot..label..second..spell..extra
+assert(NR.BurstSpells.Save(252,{}))
+ui.note:SetText(text);ui:Parse();assert(ui.preview and #ui.preview.plans==2)
+assert(#ui.preview.plans[1].rows==4 and #ui.preview.plans[2].rows==1)
+ui:Play();assert(#NR.preview.plan.rows==4)
+ui:Save();assert(ui.message:GetText():find('已按你的爆发名单跳过 2 条提醒',1,true))
+local saved=NR.EventPlans.Get(252,3101,'mythic')
+assert(#saved.rows==4 and saved.rows[1].spellID==999991)
+assert(saved.rows[2].itemID==42650 and saved.rows[3].slot==13 and saved.rows[4].label=='hello')
+assert(NR.EventPlans.Get(252,3105,'mythic').rows[1].spellID==999991)
+local previous=NR.db.previousDungeons['252:2813']
+ui.note:SetText(header..first..extra..second..spell);ui:Parse()
+assert(not ui.preview);ui:Save()
+assert(NR.EventPlans.Get(252,3101,'mythic')==saved and NR.db.previousDungeons['252:2813']==previous)
+assert(NR.EventPlans.Get(252,3105,'mythic').rows[1].spellID==999991)
+ui.note:SetText(first..spell..extra);ui:Parse()
+assert(ui.preview and #ui.preview.rows==1 and ui.preview.rows[1].spellID==999991)
+ui:Save();assert(ui.message:GetText():find('已按你的爆发名单跳过 1 条提醒',1,true))
+assert(#NR.EventPlans.Get(252,3101,'mythic').rows==1)
+""")
+
+    def test_import_rechecks_when_burst_list_or_text_target_spec_changes(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r"""
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local ui=NR.UI
+ui.note:SetText('EncounterID:3492;Difficulty:Mythic;\nph:1;time:10;spellid:51271;\nph:1;time:20;spellid:47568;')
+ui:Parse();assert(#ui.preview.rows==2)
+assert(NR.BurstSpells.Save(251,{}));ui:Play();assert(not NR.preview.running)
+ui:Save()
+assert(not NR.NotePlans(251).plans['3492:mythic'])
+ui:Parse();assert(#ui.preview.rows==1);ui:Save()
+assert(#NR.NotePlans(251).plans['3492:mythic'].rows==1)
+ui:Parse();function GetSpecializationInfo() return 252 end;ui:Save()
+assert(not NR.NotePlans(252).plans['3492:mythic'])
+ui:Parse();assert(#ui.preview.rows==2);ui:Save()
+assert(#NR.NotePlans(252).plans['3492:mythic'].rows==2)
+local event='NRPlan:2;EncounterID:3101;Difficulty:mythic;SpecID:252;\nanchor:start;occurrence:1;time:0;window:10;spellid:42650;\nanchor:start;occurrence:1;time:5;window:10;spellid:999991;'
+ui.note:SetText(event);ui:Parse();assert(#ui.preview.rows==2)
+assert(NR.BurstSpells.Save(251,{51271}));ui:Save()
+assert(#NR.EventPlans.Get(252,3101,'mythic').rows==2,'other spec edits do not invalidate the checked website plan')
+ui:Parse();assert(NR.BurstSpells.Save(252,{}));ui:Save()
+assert(#NR.EventPlans.Get(252,3101,'mythic').rows==2,'target spec edits must require rechecking')
+ui:Parse();ui:Save();assert(#NR.EventPlans.Get(252,3101,'mythic').rows==1)
+""")
+
+    def test_custom_burst_list_persistence_empty_reset_and_combat_guards(self):
+        lua,nr=runtime(); lua.globals().NR=nr
+        lua.execute(r"""
+NR.db={}
+C_SpellBook={IsSpellKnown=function() return true end}
+local initial,custom=NR.BurstSpells.Get(251)
+assert(#initial==3 and not custom)
+local ids={51271,999991}
+assert(NR.BurstSpells.Save(251,ids)); ids[1]=47568
+local p=NR.EventPlans.Default(251,9999)
+assert(#p.rows==2 and p.rows[1].spellID==51271 and p.rows[2].spellID==999991)
+local read=NR.BurstSpells.Get(251);read[1]=47568
+assert(NR.BurstSpells.Get(251)[1]==51271,'read/write copies isolate persisted selection')
+NR.db=NR.Copy(NR.db)
+assert(NR.EventPlans.Default(251,9999).rows[2].spellID==999991,'saved table survives reload')
+assert(not select(2,NR.BurstSpells.Get(252)),'other specs keep defaults')
+assert(not NR.BurstSpells.Save(251,{51271,51271}))
+assert(not NR.BurstSpells.Save(251,{[2]=51271}))
+assert(not NR.BurstSpells.Save(251,{0}))
+local huge={};for i=1,101 do huge[i]=i end
+assert(not NR.BurstSpells.Save(251,huge))
+combat=true
+assert(not NR.BurstSpells.Save(251,{}));assert(not NR.BurstSpells.Reset(251))
+combat=false
+assert(#NR.BurstSpells.Get(251)==2)
+assert(NR.BurstSpells.Save(251,{}));assert(select(2,NR.BurstSpells.Get(251)))
+assert(not NR.EventPlans.Default(251,9999),'explicit empty does not fall back to built-ins')
+assert(NR.BurstSpells.Reset(251));assert(#NR.BurstSpells.Get(251)==3)
+assert(not select(2,NR.BurstSpells.Get(251)))
+assert(NR.BurstSpells.Save(251,{999991,51271}))
+C_SpellBook.IsSpellKnown=function(id)return id==51271 end
+p=NR.EventPlans.Default(251,9999);assert(#p.rows==1 and p.rows[1].spellID==51271)
+C_SpellBook=nil;IsPlayerSpell=nil
+p=NR.EventPlans.Default(251,9999);assert(#p.rows==1 and p.rows[1].spellID==51271,'unknown custom spells fail closed')
+""")
+
+    def test_custom_burst_ui_add_remove_and_spec_switch(self):
+        lua,nr=runtime(True); lua.globals().NR=nr
+        lua.execute(r"""
+local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+NR.UI.frame:Show();NR.UI:SetPage('settings')
+NR.UI.burstButton.scripts.OnClick()
+local u=NR.BurstUI
+assert(u.frame:IsShown() and u.specID==251)
+assert(#u.selected.rows==3 and u.selected.rows[1].name.owner==u.selected.rows[1])
+local removed=u.selected.rows[1].spellID
+u.selected.rows[1].button.scripts.OnClick()
+assert(#NR.BurstSpells.Get(251)==2 and select(2,NR.BurstSpells.Get(251)))
+local found=false
+for _,row in ipairs(u.available.rows) do
+ if row:IsShown() and row.spellID==removed then row.button.scripts.OnClick();found=true;break end
+end
+assert(found and #NR.BurstSpells.Get(251)==3)
+C_Spell.GetSpellInfo=function(id)
+ if id==999991 then return {name='Custom Burst',iconID=1} end
+ if id==999992 then return {name={secret=true}} end
+end
+u.input:SetText('|cff71d5ff|Hspell:999991:0|h[Custom Burst]|h|r');u.addButton.scripts.OnClick()
+assert(#NR.BurstSpells.Get(251)==4 and NR.BurstSpells.Get(251)[4]==999991)
+u.input:SetText('999991');u.input.scripts.OnEnterPressed()
+assert(#NR.BurstSpells.Get(251)==4 and u.message:GetText():find('已经'))
+for _,value in ipairs({'bad','999993','999992','|Hitem:999991|h[item]|h'}) do
+ u.input:SetText(value);u.addButton.scripts.OnClick();assert(#NR.BurstSpells.Get(251)==4)
+end
+combat=true;u:Remove(999991);u:Reset();assert(#NR.BurstSpells.Get(251)==4);combat=false
+function GetSpecializationInfo() return 252 end
+u:Remove(999991)
+assert(u.specID==252 and #NR.BurstSpells.Get(251)==4 and not select(2,NR.BurstSpells.Get(252)))
+function GetSpecializationInfo() return 251 end
+u:Open();u.resetButton.scripts.OnClick();assert(not select(2,NR.BurstSpells.Get(251)))
+NR.UI.frame:Hide();assert(not u.frame:IsShown())
+""")
+
+    def test_custom_burst_list_drives_next_pull_but_not_saved_boss_plan(self):
+        lua,nr=runtime(True); lua.globals().NR=nr
+        lua.execute(r"""
+local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+C_SpellBook={IsSpellKnown=function()return true end}
+assert(NR.BurstSpells.Save(251,{439843}))
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',8)
+assert(#NR.engine.rows==1 and NR.engine.rows[1].spellID==439843)
+driver.scripts.OnEvent(driver,'ENCOUNTER_END')
+assert(NR.BurstSpells.Save(251,{}))
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',8);assert(#NR.engine.rows==0)
+driver.scripts.OnEvent(driver,'ENCOUNTER_END')
+local own=NR.EventPlans.New(251,9999)
+own.rows={{id=1,spellID=51271,anchor='start',occurrence=1,time=5,window=10}}
+assert(NR.EventPlans.Save(own))
+driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',8)
+assert(#NR.engine.rows==1 and NR.engine.rows[1].spellID==51271 and not NR.engine.rows[1].auto)
+""")
+
+    def test_frost_default_bursts_use_reviewed_spells_and_learned_talents(self):
+        lua,nr=runtime(); lua.globals().NR=nr
+        lua.execute(r"""
+C_SpellBook={IsSpellKnown=function() return true end}
+local p=NR.EventPlans.Default(251,9999)
+local expected={[51271]=true,[439843]=true,[1249658]=true}
+assert(p and #p.rows==3,'Frost defaults: Pillar, Reapers Mark, Breath')
+for _,row in ipairs(p.rows) do
+ assert(expected[row.spellID],'no obsolete or utility spell in Frost defaults')
+ expected[row.spellID]=nil
+end
+assert(next(expected)==nil)
+C_SpellBook.IsSpellKnown=function(id) return id==51271 or id==47568 end
+p=NR.EventPlans.Default(251,9999)
+assert(p and #p.rows==1 and p.rows[1].spellID==51271,'unlearned talents omitted; old Rune Weapon never auto-added')
+""")
 
     def test_unconfigured_mplus_boss_uses_builtin_burst_ready_reminders(self):
         lua,nr=runtime(True); lua.globals().NR=nr

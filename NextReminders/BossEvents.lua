@@ -24,6 +24,15 @@ function NR.BossEvents.New(definitions, publish, log)
             if d.warning and severity==d.warning.severity then self:Fire(key,now+d.delay,now,true) end
         end
     end
+    function s:BigWigsMessage(spellID,now)
+        if not NR.Number(spellID,1,10000000) then return end
+        for key,d in pairs(self.definitions) do
+            if d.bigWigsMessage == spellID then
+                -- Same warning as the native event. Fire's guard deduplicates either arrival order.
+                self:Fire(key,now+(d.delay or 0),now,true)
+            end
+        end
+    end
     function s:Batch(entries,matches,now)
         for key,d in pairs(self.definitions) do
             if d.batch and matches(d.batch) then self:Fire(key,now,now,false,entries[1] and entries[1].id)

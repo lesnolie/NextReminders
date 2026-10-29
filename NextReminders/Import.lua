@@ -149,3 +149,57 @@ function NR.ValidateBindings(plan)
     end
     return true
 end
+
+-- Static NSRT/MRT plans are stored per specialization, like event and timeline plans.
+function NR.NotePlans(specID)
+    if not NR.Number(specID, 1, 10000) or specID % 1 ~= 0 or type(NR.db) ~= "table" then return nil end
+    NR.db.notePlans = type(NR.db.notePlans) == "table" and NR.db.notePlans or {}
+    local bucket = NR.db.notePlans[specID]
+    if type(bucket) ~= "table" then bucket = {}; NR.db.notePlans[specID] = bucket end
+    bucket.plans = type(bucket.plans) == "table" and bucket.plans or {}
+    bucket.previous = type(bucket.previous) == "table" and bucket.previous or {}
+    return bucket
+end
+
+-- The spec whose built-in burst spells a legacy plan uses most; a tie or no match means the current spec.
+local function ownerSpec(plan, current)
+    local votes = {}
+    for _, row in ipairs(plan.rows) do
+        local entry = NR.SpellCatalog.Get(row.spellID)
+        for _, id in ipairs(entry and entry.specs or {}) do votes[id] = (votes[id] or 0) + 1 end
+    end
+    local best, count, tie
+    for id, n in pairs(votes) do
+        if not count or n > count then best, count, tie = id, n, false elseif n == count then tie = true end
+    end
+    return best and not tie and best or current
+end
+
+-- Before 0.3.8 static plans were shared by every spec. Move each one, with its backup, into one spec's bucket.
+-- Returns how many plans moved, or nil while the current spec is still unknown.
+function NR.MigrateNotePlans(currentSpec)
+    local legacy, previous = NR.db.plans, NR.db.previousPlans
+    if type(legacy) ~= "table" and type(previous) ~= "table" then return 0 end
+    if not NR.Number(currentSpec, 1, 10000) or currentSpec % 1 ~= 0 then return nil end
+    local moved, owners = 0, {}
+    -- Keep the original data, including invalid/conflicting entries, recoverable after migration.
+    if not NR.db.legacyNotePlans then NR.db.legacyNotePlans = {plans=NR.Copy(legacy), previous=NR.Copy(previous)} end
+    for key, plan in pairs(type(legacy) == "table" and legacy or {}) do
+        if type(key) == "string" and NR.ValidatePlan(plan) then
+            local spec = ownerSpec(plan, currentSpec)
+            local bucket = NR.NotePlans(spec)
+            if not bucket.plans[key] then
+                local saved = NR.Copy(plan); saved.specID = spec; bucket.plans[key] = saved; moved = moved + 1
+                owners[key] = spec
+                local backup = type(previous) == "table" and previous[key]
+                if NR.ValidatePlan(backup) and not bucket.previous[key] then
+                    backup = NR.Copy(backup); backup.specID = spec; bucket.previous[key] = backup
+                end
+            end
+        end
+    end
+    local last = NR.db.lastPlan
+    if type(last) == "string" then NR.db.lastPlan = owners[last] and { specID = owners[last], key = last } or nil end
+    NR.db.plans, NR.db.previousPlans = nil, nil
+    return moved
+end

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {parseNSRT,rebind,move,calibrate,exportTimeline,History,regions} from '../web/timeline.mjs';
+import {parseNSRT,rebind,move,calibrate,exportTimeline,History,regions} from './fixtures/protocol/timeline.mjs';
 const raw='EncounterID:3492;Difficulty:Mythic;Name:Ulatek;\n'+[1,1.5,1.75,2.5].map((ph,i)=>`ph:${ph};time:${i?10:135.5};tag:252;spellid:42650;`).join('\n');
 const personalText=readFileSync(new URL('./fixtures/ulatek-heroic-personal.nsrt',import.meta.url),'utf8');
 const personal=parseNSRT(personalText);

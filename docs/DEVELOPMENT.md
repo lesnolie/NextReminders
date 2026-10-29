@@ -1,5 +1,8 @@
 # 独立维护流程
 
+> 网页项目：`C:\work\tellmenext-web`；线上入口：https://tellmenext.cc/zh/mplus/ 。本仓库只维护游戏插件，旧 `web/` 已于 2026-10-24 移除。网页修改、预览、构建与发布均在 tellmenext-web 项目进行。
+> 以下旧网页说明仅为历史记录，不作为当前开发入口。插件数据维护源已迁至 `data/`；`tests/fixtures/protocol/` 仅用于旧格式兼容测试。
+
 从 0.1.2-dev 起，不再获取 TimelineReminders。其早期调查作为历史来源保留；当前实现、测试、打包与后续首领支持由本项目独立维护。
 
 ## 首领固定时间
@@ -40,4 +43,4 @@ python tools/build.py
 
 ## 40专精爆发目录
 
-独立源为web/burst-spells.json。先核对动作编号、专精、天赋替代证据与本地图片，再运行python tools/sync_spell_catalog.py；--check用于验证输出一致。统一入口同时验证40专精JS导出到真实Lua引擎以及名称／图标秘密值回退。生成文件不手工编辑；目录不保存默认冷却时间、不自动建立施法别名。详见research/BURST_CATALOG.md。
+独立源为data/burst-spells.json。先核对动作编号、专精、天赋替代证据与本地图片，再运行python tools/sync_spell_catalog.py；--check用于验证输出一致。统一入口同时验证40专精JS导出到真实Lua引擎以及名称／图标秘密值回退。生成文件不手工编辑；目录不保存默认冷却时间、不自动建立施法别名。详见research/BURST_CATALOG.md。

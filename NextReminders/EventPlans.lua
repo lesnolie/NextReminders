@@ -16,7 +16,7 @@ function P.Options(encounterID, difficulty)
     table.sort(keys)
     for _,key in ipairs(keys) do
         local d=P.Definition(encounterID,difficulty)[key]
-        out[#out+1]={key=key,label=d.label.."（待游戏核对）"}
+        out[#out+1]={key=key,label=d.label..(d.signalSource and "（"..d.signalSource.."）" or "（待游戏核对）")}
     end
     return out
 end
@@ -269,10 +269,9 @@ end
 function P.Default(specID, encounterID)
     if not integer(specID,1,10000) or not integer(encounterID,1,1000000) then return end
     local p={kind="events",auto=true,specID=specID,encounterID=encounterID,difficulty="mythic",enabled=true,rows={},dataVersion=P.dataVersion}
-    for _,entry in ipairs(NR.SpellCatalog.ForSpec(specID)) do
-        local primary=false
-        for _,id in ipairs(entry.primarySpecs) do if id==specID then primary=true end end
-        if primary and known(entry) and #p.rows<100 then
+    for _,spellID in ipairs(NR.BurstSpells.Get(specID)) do
+        local entry=NR.SpellCatalog.Get(spellID) or {id=spellID,talent=true}
+        if known(entry) and #p.rows<100 then
             p.rows[#p.rows+1]={id=#p.rows+1,spellID=entry.id,anchor="start",occurrence=1,time=0,window=10,after="ready",auto=true}
         end
     end

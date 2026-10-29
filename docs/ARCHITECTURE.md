@@ -1,5 +1,12 @@
 # 模块合同与数据边界
 
+2026-10-28 自定义默认爆发：BurstSpells.Get/Save/Reset 封装 `NextRemindersDB.burstSpells[specID]`，nil 表示跟随目录 primarySpecs，空数组表示显式关闭该专精自动技能；自定义列表为完整快照，不随默认目录更新合并。读写复制，限制100个唯一正整数编号，非法保存不改变旧值，损坏的存储回退默认。Resolve 接受编号/技能链接，目录外编号须有公开客户端名称；不创建跨编号别名。EventPlans.Default 每场读取名单后按已学会过滤；未知自定义技能在查询不可用时不自动加入。BurstUI 在设置页独立窗口即时保存，每次写入核对当前专精及脱战状态；首领方案、导入和全局开关语义保持不变。
+
+2026-10-24 冷却门控：Engine 在显示技能提醒前读取 Ready.State，只有明确 ready 才显示；不可用的阶段当次标记完成，重复校时不能复活。零秒 start/pull 技能通过 readyStart 等待首次 ready，以该时刻重新起算显示窗口。默认后续循环按技能去重，已有显式 after:ready 归属优先。CooldownUpdate 为所有技能保存短期公开状态并立即刷新显示；不读取秘密冷却数值。预览注入 ready 状态，后续冷却完成仍由手动回放驱动，不查询实战 API。
+
+> 网页项目：`C:\work\tellmenext-web`；线上入口：https://tellmenext.cc/zh/mplus/ 。本仓库只维护游戏插件，旧 `web/` 已于 2026-10-24 移除。网页修改、预览、构建与发布均在 tellmenext-web 项目进行。
+> 以下旧网页说明仅为历史记录，不作为当前开发入口。插件数据维护源已迁至 `data/`；`tests/fixtures/protocol/` 仅用于旧格式兼容测试。
+
 0.3.5导入光标：UI.noteCaret为导入EditBox自己的OVERLAY纹理，与原生输入共享ScrollChild坐标／裁剪；空框起点与4单位inset一致，非空位置由OnCursorChanged公开x/y/height驱动。光标宽2、0.5秒闪烁，原生位置更新即重亮；只有聚焦且位置已知时安装OnUpdate，失焦／切页／隐藏清理。不会测量文本宽度、改插入位置或增加保存数据；仅创建时初始化空文本及位置0。保留最近真实布局以兼容Cursor-before-Text顺序。此项取代0.3.3下方“不模拟额外纹理”的历史实现选择；49项STATIC/MOCK，真实像素LIVE待测。
 
 0.3.4新增内置爆发目录：web/burst-spells.json为唯一维护源，sync_spell_catalog.py生成双方静态文件，dataVersion=2026.10.13.1。SpellCatalog.lua在Core之后加载，Get(id)/ForSpec(specID)返回副本，Info(id)优先公开游戏元数据、空／异常／秘密值时回退目录，不读取技能冷却、天赋、血量或事件身份。EventPlans.Action、Display、PreviewUI共用Info；Main的/nr spells只读当前专精。网页picker按当前专精展示中文名、图标、主要／可选标记，显式点选只改当前行，清生成快照；原手填编号兼容。目录不做时点、循环、自动施法、默认策略或跨编号别名。维护、来源和48项验证边界见research/BURST_CATALOG。
@@ -79,3 +86,13 @@ Main 注册玩家成功施法及公开时间轴事件。战斗开始/进入世�
 `BossData.lua` 为首领数据唯一源，采用独立 dataVersion；旧基线来源保留在研究记录中。原 ZIP 更新器和指纹 manifest 已退役，历史产物仍保留。新时点来自自身实测、公开时长批次记录或 Lorrgs；新的识别节点须补回放证据与游戏验证。
 
 程序与数据写入源码目录，个人方案存于游戏 SavedVariables。构建前快照所有交付输入，运行实际测试（含自有数据合同与事件回放）后再次比对快照；从相同快照归档并逐项核对字节。最终 manifest 只记录实际验证证据，保留 source_review=PENDING、LIVE=NOT_RUN。构建无需下载或读取任何上游 ZIP。
+
+
+### 2026-10-24：导入后调整与保存方案浏览
+
+`web/nsrt-import.mjs` 提供 readNSRT（严格读取，不改草稿）、importNSRT（来源标签选择与显式阶段起点，复制后追加）和 moveReminder（秒数调整）。导入目标必须在当前副本；错误不部分写入，成功清除旧生成结果。输出仍使用 NRDungeon:1 / NRPlan:2，游戏存储协议不变。
+
+`UI:SavedPlans` 从 plans/eventPlans/timelinePlans 的实际存储读取并验证，返回副本；`OpenSaved` / `SelectSaved` 展示只读列表与详情，明确选择后通过 PreviewUI:Open 播放。暂停方案不被启用，原导入文本不被覆盖。PreviewUI 的整副本按钮用菜单选择首领。
+
+
+大秘境时间轴（2026-10-24）：`mplus-timeline.mjs` 沿用团本页的共享刻度、技能轨道、拖动节点设计；事件相对行按事件和次数独立分轨，不伪造开战时间。同刻技能点分层排布。鼠标/触屏拖动、键盘微调仅更新选中行的 time，放开时提交一次历史；取消拖动不写入。planner 复用团本 History，记录当前副本编辑快照，切换专精/副本重置历史；任何编辑、撤销、重做使旧导出失效。首领切换保留该副本的编辑历史。

@@ -1,5 +1,8 @@
 # NextReminders 团本可视化时间轴编辑器行动计划
 
+> 网页项目：`C:\work\tellmenext-web`；线上入口：https://tellmenext.cc/zh/mplus/ 。本仓库只维护游戏插件，旧 `web/` 已于 2026-10-24 移除。网页修改、预览、构建与发布均在 tellmenext-web 项目进行。
+> 以下旧网页说明仅为历史记录，不作为当前开发入口。插件数据维护源已迁至 `data/`；`tests/fixtures/protocol/` 仅用于旧格式兼容测试。
+
 更新：2026-10-23
 
 状态：执行中。本文是实施计划与验收边界，不代表已完成，也不代表游戏内 LIVE 通过。
@@ -50,7 +53,7 @@
 
 ### 3.1 共享首领规则源
 
-唯一维护源：`web/boss-rules.json`。
+唯一维护源：`data/boss-rules.json`。
 
 生成物：
 

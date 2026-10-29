@@ -36,8 +36,8 @@ def build():
     if not (SOURCE/"Media"/"burst_meow.ogg").exists(): raise ValueError("Voice pack Media/burst_meow.ogg missing")
     inputs = files + media + documentation + [ROOT/"CONTEXT.md"]
     inputs += sorted(p for p in (ROOT/"tools").glob("*") if p.suffix in (".py",".mjs"))
-    inputs += sorted((ROOT/"tests").glob("*.py"))
-    inputs += sorted(p for p in (ROOT/"web").rglob("*") if p.is_file() and p.suffix in (".html",".css",".mjs",".json",".png",".jpg",".jpeg",".webp",".svg",".ico"))
+    inputs += sorted(p for p in (ROOT/"tests").glob("*") if p.suffix in (".py", ".mjs"))
+    inputs += sorted(p for folder in ("data", "tests/fixtures") for p in (ROOT/folder).rglob("*") if p.is_file())
     inputs += sorted((ROOT/"docs/research").glob("*.md"))
     snapshot = {str(p.relative_to(ROOT)).replace("\\","/"):p.read_bytes() for p in inputs}
 

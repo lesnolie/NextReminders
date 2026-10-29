@@ -6,9 +6,38 @@ from check import runtime, ROOT
 
 
 class TimelineTests(unittest.TestCase):
+    def test_import_filters_deleted_default_bursts_in_preview_and_storage(self):
+        self.lua.execute('''
+function GetSpecializationInfo() return 252 end
+local ui=NR.UI
+local extra='anchor:start;occurrence:1;offset:5;window:10;timing:auto;spellid:999991;\\n'
+ui.note:SetText(note..extra);ui:Parse();assert(#ui.preview.rows==5)
+ui:Save();assert(#NR.TimelinePlans.Get(252,3492,'mythic').rows==5)
+assert(NR.BurstSpells.Save(252,{}))
+assert(#NR.TimelinePlans.Get(252,3492,'mythic').rows==5,'saved timeline is unchanged')
+ui:Parse();assert(#ui.preview.rows==1 and ui.preview.rows[1].spellID==999991)
+ui:Play();assert(#NR.preview.plan.rows==1 and NR.preview.plan.rows[1].spellID==999991)
+ui:Save();assert(#NR.TimelinePlans.Get(252,3492,'mythic').rows==1)
+assert(ui.message:GetText():find('已按你的爆发名单跳过 4 条提醒',1,true))
+ui.note:SetText(note);ui:Parse();assert(not ui.preview);ui:Save()
+assert(#NR.TimelinePlans.Get(252,3492,'mythic').rows==1)
+''')
+
+    def test_saved_timeline_can_be_inspected_and_rehearsed(self):
+        self.lua.execute('''
+local p=assert(NR.TimelinePlans.Parse(note));assert(NR.TimelinePlans.Save(p))
+local saved=NR.TimelinePlans.Find(252,3492,'mythic')
+function GetSpecializationInfo() return 252 end
+assert(NR.PreviewUI:OpenLibrary());assert(#NR.PreviewUI.entries==1)
+assert(NR.preview.running and not NR.preview.playing)
+NR.PreviewUI.play.scripts.OnClick()
+assert(NR.preview.running and NR.preview.timelineMode and NR.PreviewUI.frame:IsShown())
+assert(saved.rows[1].fallback==135.5)
+''')
+
     def test_personal_heroic_without_tag_round_trips(self):
         result = subprocess.run(['node', '--input-type=module', '-e',
-            "import {readFileSync} from 'node:fs'; import {parseNSRT,exportTimeline} from './web/timeline.mjs'; console.log(exportTimeline(parseNSRT(readFileSync('tests/fixtures/ulatek-heroic-personal.nsrt','utf8'))));"],
+            "import {readFileSync} from 'node:fs'; import {parseNSRT,exportTimeline} from './tests/fixtures/protocol/timeline.mjs'; console.log(exportTimeline(parseNSRT(readFileSync('tests/fixtures/ulatek-heroic-personal.nsrt','utf8'))));"],
             cwd=ROOT,check=True,capture_output=True,text=True,encoding='utf-8')
         self.lua.globals().personal = result.stdout
         self.lua.execute('''
@@ -51,7 +80,8 @@ assert(not NR.TimelinePlans.Parse(note:gsub('occurrence:1','occurrence:every')))
 
     def test_real_ui_preview_save_and_isolated_rollback(self):
         self.lua.execute('''
-NR.db.plans.keep={sentinel=42}
+NR.NotePlans(251).plans.keep={sentinel=42}
+function GetSpecializationInfo() return 252 end
 local ui=NR.UI;ui.note:SetText(note);ui:Parse();assert(ui.preview.kind=='timeline3')
 ui:Save();assert(NR.db.lastPlanKind=='timeline3')
 assert(NR.TimelinePlans.Get(252,3492,'mythic'))
@@ -62,7 +92,7 @@ NR.preview:Stop()
 local p=assert(NR.TimelinePlans.Parse(note));p.rows[1].fallback=140;assert(NR.TimelinePlans.Save(p))
 assert(NR.TimelinePlans.Rollback(NR.db.lastTimelinePlan))
 assert(NR.TimelinePlans.Get(252,3492,'mythic').rows[1].fallback==135.5)
-assert(NR.db.plans.keep.sentinel==42)
+assert(NR.NotePlans(251).plans.keep.sentinel==42)
 ui.pausePlan.scripts.OnClick();assert(not NR.TimelinePlans.Get(252,3492,'mythic'))
 ''')
 

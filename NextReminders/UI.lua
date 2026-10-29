@@ -7,52 +7,125 @@ local button, label, edit, check = NR.Theme.Button, NR.Theme.Label, NR.Theme.Edi
 function UI:Message(text) self.message:SetText(text) end
 
 function UI:Refresh()
-    self.dataVersion:SetText("v" .. NR.version .. "  ·  数据 " .. NR.BossData.dataVersion)
+    self.dataVersion:SetText(self:SpecLine())
+    self:PaintBursts(); self:PaintImport()
+    if self.returning then self.returning=nil; self:PaintEnable(); self:Message(self:PageHint()); return end
     local s = NR.db.settings
     self.lead:SetText(tostring(s.lead)); self.window:SetText(tostring(s.window)); self.glow:SetText(s.glow)
     for key, control in pairs(self.checks) do control:SetChecked(s[key]) end
     self.volume:SetText(tostring(s.volume))
     self.soundValues = {}
     for key in pairs(self.soundPicks) do self:SetSoundChoice(key,s[key]) end
-    self:PaintEnable(); self:ShowMemory()
+    self.settingsDirty=nil
+    self:PaintEnable()
     self:Message(self:PageHint())
 end
 
+-- Brand subtitle on every window: version and the spec whose plans and bursts are shown.
+function UI:SpecLine()
+    local spec=NR.GetIdentity().specID
+    return "v" .. NR.version .. " · " .. (spec and NR.SpecName(spec) or "未选择专精")
+end
+
 function UI:PageHint()
-    if self.page == "settings" then return "修改后点击“保存设置”；战斗中不能保存。" end
-    return "大秘境粘贴网站整副本方案；团本粘贴 Lorrgs MRT／NSRT，动态阶段需核对绑定。"
+    if self.page == "settings" then
+        if self.settingsDirty then return "有未保存的修改：点“保存设置”后生效。" end
+        return "声音与显示修改后点“保存设置”；爆发技能在编辑页即时保存。战斗中不能修改。"
+    end
+    return "粘贴网站或 Lorrgs 方案 → 检查方案 → 保存并启用。检查和预览都不会改动已保存的方案。"
+end
+
+local FORMAT = { dungeon="网站整副本方案", timeline3="网站时间轴方案", events="网站首领方案", note="Lorrgs MRT／NSRT" }
+
+-- Which importer a pasted text goes to; nil for an empty box.
+local function formatOf(text)
+    local function has(prefix) return text:match("^%s*" .. prefix) or text:match("\n%s*" .. prefix) end
+    if has("NRDungeon:") then return "dungeon" end
+    if has("NRPlan:3;") then return "timeline3" end
+    if has("NRPlan:") then return "events" end
+    if text:match("%S") then return "note" end
+end
+
+local function burstSignature(specID)
+    local ids, custom = NR.BurstSpells.Get(specID)
+    table.sort(ids)
+    return (custom and "custom:" or "default:") .. table.concat(ids, ",")
+end
+
+local function filterImported(plan, specID)
+    local removed, count = NR.BurstSpells.Removed(specID), 0
+    local plans = plan.kind == "dungeon" and plan.plans or {plan}
+    for _, entry in ipairs(plans) do
+        local rows = {}
+        for _, row in ipairs(entry.rows) do
+            if (row.actionType or "spell") == "spell" and removed[row.spellID] then
+                count = count + 1
+            else
+                rows[#rows + 1] = row
+            end
+        end
+        entry.rows = rows
+    end
+    local ok, err
+    if plan.kind == "dungeon" then ok, err = NR.EventPlans.ValidateDungeon(plan)
+    elseif plan.kind == "events" then ok, err = NR.EventPlans.Validate(plan)
+    elseif plan.kind == "timeline3" then ok, err = NR.TimelinePlans.Validate(plan)
+    else ok, err = NR.ValidatePlan(plan) end
+    if not ok then return nil, err end
+    return count
+end
+
+local function skippedText(count)
+    return count and count > 0 and (" 已按你的爆发名单跳过 " .. count .. " 条提醒。") or ""
 end
 
 function UI:Parse()
+    self:ParseText(); self:PaintImport()
+end
+
+function UI:ParseText()
     if InCombatLockdown() then self:Message("请脱战后导入") return end
     local targetDifficulty = self.difficulty ~= "source" and self.difficulty or nil
     local text=self.note:GetText()
     local plan,err
-    if text:match("^%s*NRDungeon:") or text:match("\n%s*NRDungeon:") then plan,err=NR.EventPlans.ParseDungeon(text)
-    elseif text:match("^%s*NRPlan:3;") or text:match("\n%s*NRPlan:3;") then plan,err=NR.TimelinePlans.Parse(text)
-    elseif text:match("^%s*NRPlan:") or text:match("\n%s*NRPlan:") then plan,err=NR.EventPlans.Parse(text)
+    local format=formatOf(text)
+    self.parseError, self.checkedText = nil, text
+    if format=="dungeon" then plan,err=NR.EventPlans.ParseDungeon(text)
+    elseif format=="timeline3" then plan,err=NR.TimelinePlans.Parse(text)
+    elseif format=="events" then plan,err=NR.EventPlans.Parse(text)
     else plan, err = NR.ParseNote(text, { personal = self.personal:GetChecked(),
         encounterID = tonumber(self.encounter:GetText()), difficulty = targetDifficulty or "mythic",
         targetDifficulty = targetDifficulty }) end
+    self.importSpec = plan and (plan.specID or NR.GetIdentity().specID) or nil
+    self.importSignature = plan and burstSignature(self.importSpec) or nil
+    self.skipped = nil
+    if plan then
+        self.skipped, err = filterImported(plan, self.importSpec)
+        if not self.skipped then plan = nil end
+    end
     for _, control in ipairs(self.binders or {}) do control:Hide() end
     self.binders, self.preview = self.binders or {}, plan
-    if not plan then self:Message(err); self.summary:SetText(""); self.bindingScroll:Hide(); self.bindingTitle:Hide(); return end
+    if not plan then
+        self.parseError=err or "无法识别这段文本"
+        self:Message(self.parseError); self.summary:SetText(self.parseError)
+        self.bindingScroll:Hide(); self.bindingTitle:Hide(); return
+    end
     if plan.kind=="dungeon" then
         local d=NR.DungeonData.dungeons[plan.dungeonID]
         local names={}
         for _,p in ipairs(plan.plans) do names[#names+1]="#"..p.encounterID.."（"..#p.rows.."条）" end
-        self.summary:SetText(d.name.."\n专精 "..plan.specID.." · 大秘境 · "..#plan.plans.."/"..#d.bosses.." 只首领\n"..table.concat(names," / ").."\n保存会更新此副本全部首领规则；未配置的旧规则清除，可整包回滚。")
+        self.summary:SetText(d.name.."\n"..NR.SpecName(plan.specID).." · 史诗钥石 · "..#plan.plans.."/"..#d.bosses.." 只首领\n"..table.concat(names," / ").."\n保存会更新此副本全部首领规则；未配置的旧规则清除，可整包回滚。")
         self.bindingScroll:Hide();self.bindingTitle:Hide()
         self.lastParsedText,self.lastPersonal,self.lastEncounterText,self.lastDifficulty=text,self.personal:GetChecked(),self.encounter:GetText(),self.difficulty
-        self:Message("整副本检查通过；预览可切换首领。事件识别仍需游戏核对。")
+        self:Message("整副本检查通过；预览可切换首领。事件识别仍需游戏核对。" .. skippedText(self.skipped))
         return
     end
     if plan.kind=="events" or plan.kind=="timeline3" then
         local boss=NR.BossData.encounters[plan.encounterID]
-        self.summary:SetText((boss and boss.name or plan.name).."\n专精 "..plan.specID.." · "..plan.difficulty.." · "..#plan.rows.." 条规则\n含事件条件、次数和等待提示。")
+        self.summary:SetText((boss and boss.name or plan.name).."\n"..NR.SpecName(plan.specID).." · "..plan.difficulty.." · "..#plan.rows.." 条规则\n含事件条件、次数和等待提示。")
         self.bindingScroll:Hide(); self.bindingTitle:Hide()
         self.lastParsedText,self.lastPersonal,self.lastEncounterText,self.lastDifficulty=text,self.personal:GetChecked(),self.encounter:GetText(),self.difficulty
-        self:Message("检查通过，点击保存启用；事件识别准确性仍需游戏验证。")
+        self:Message("检查通过，点击保存启用；事件识别准确性仍需游戏验证。" .. skippedText(self.skipped))
         return
     end
     local phases, seen = {}, {}
@@ -114,7 +187,7 @@ function UI:Parse()
     self.bindingContent:SetHeight(math.max(112,#phases*40))
     if #phases>0 then self.bindingScroll:Show(); self.bindingTitle:Show()
     else self.bindingScroll:Hide(); self.bindingTitle:Hide() end
-    local difficultyLabels = {normal="普通",heroic="英雄",mythic="史诗／大秘境"}
+    local difficultyLabels = {normal="普通",heroic="英雄",mythic="史诗／史诗钥石"}
     local origin = plan.sourceDifficulty and "（来源：" .. difficultyLabels[plan.sourceDifficulty] .. "）" or ""
     local summary = { (definition and definition.name or plan.name) .. "　用于：" .. difficultyLabels[plan.difficulty] .. origin .. "　" .. #plan.rows .. " 条提醒" }
     local fixed = definition and definition.fixed and definition.fixed[1]
@@ -136,6 +209,7 @@ function UI:Parse()
     if plan.sourceDifficulty and plan.sourceDifficulty ~= plan.difficulty then
         self:Message(self.message:GetText() .. " 跨难度复用：原施法秒数保留，请核对实际机制时点。")
     end
+    self:Message(self.message:GetText() .. skippedText(self.skipped))
     self.lastParsedText = self.note:GetText()
     self.lastPersonal = self.personal:GetChecked()
     self.lastEncounterText = self.encounter:GetText()
@@ -149,6 +223,10 @@ function UI:CurrentPlan()
     if self.lastDifficulty ~= self.difficulty or (self.preview.format == "MRT" and self.lastEncounterText ~= self.encounter:GetText()) then
         return nil, "首领或使用难度已变化，请重新预览"
     end
+    if (not self.preview.specID and self.importSpec ~= NR.GetIdentity().specID)
+        or self.importSignature ~= burstSignature(self.importSpec) then
+        return nil, "专精或爆发技能名单已变化，请重新检查"
+    end
     return self.preview
 end
 
@@ -161,6 +239,12 @@ function UI:Play()
 end
 
 function UI:Save()
+    if self:Store() then self.saved=self.preview end
+    self:PaintImport()
+end
+
+-- Saves the checked plan; true only when it was stored and enabled.
+function UI:Store()
     if InCombatLockdown() then self:Message("请脱战后保存") return end
     local input, err = self:CurrentPlan()
     if not input then self:Message(err); return end
@@ -169,35 +253,56 @@ function UI:Save()
         ok,err=NR.TimelinePlans.Save(input)
         if not ok then self:Message(err); return end
         NR.db.lastPlanKind="timeline3"
-        self:Message("已保存时间轴方案；本专精同首领优先使用，旧方案保留。固定兜底不是实测。")
-        return
+        NR.PreviewUI:Remember(input)
+        self:Message("已保存时间轴方案；本专精同首领优先使用，旧方案保留。固定兜底不是实测。" .. skippedText(self.skipped))
+        return true
     end
     if input.kind=="dungeon" then
         ok,err=NR.EventPlans.SaveDungeon(input)
         if not ok then self:Message(err);return end
         NR.db.lastPlanKind="dungeon"
-        self:Message("已导入整副本方案；按专精和首领自动匹配，原规则已整包备份。")
-        return
+        NR.PreviewUI:Remember(input.plans[1])
+        self:Message("已导入整副本方案；按专精和首领自动匹配，原规则已整包备份。" .. skippedText(self.skipped))
+        return true
     end
     if input.kind=="events" then
         ok,err=NR.EventPlans.Save(input)
         if not ok then self:Message(err); return end
         NR.db.lastEventPlan={specID=input.specID,encounterID=input.encounterID,difficulty=input.difficulty}
         NR.db.lastPlanKind="events"
-        self:Message("已导入网站规则；本专精、首领和难度自动匹配。")
-        return
+        NR.PreviewUI:Remember(input)
+        self:Message("已导入网站规则；本专精、首领和难度自动匹配。" .. skippedText(self.skipped))
+        return true
     end
     ok, err = NR.ValidateBindings(input)
     if not ok then self:Message(err) return end
+    local player = NR.GetIdentity()
+    local notes = NR.NotePlans(player.specID)
+    if not notes then self:Message("还没有专精：方案按专精分开保存，请先选择专精") return end
     local key = self.preview.encounterID .. ":" .. self.preview.difficulty
-    local old = NR.db.plans[key]
-    if old then NR.db.previousPlans[key] = NR.Copy(old) end
+    local old = notes.plans[key]
+    if old then notes.previous[key] = NR.Copy(old) end
     local plan = NR.Copy(self.preview)
-    plan.enabled, plan.importedAt, plan.dataVersion = true, time(), NR.BossData.dataVersion
-    NR.db.plans[key] = plan
-    NR.db.lastPlan = key
+    plan.enabled, plan.importedAt, plan.dataVersion, plan.specID = true, time(), NR.BossData.dataVersion, player.specID
+    notes.plans[key] = plan
+    NR.db.lastPlan = { specID = player.specID, key = key }
     NR.db.lastPlanKind="timeline"
-    self:Message("已保存并启用 " .. #plan.rows .. " 条提醒。" .. (old and "原方案已备份，可回滚。" or ""))
+    NR.PreviewUI:Remember(plan)
+    self:Message("已保存到当前专精（" .. NR.SpecName(player.specID) .. "）并启用 " .. #plan.rows .. " 条提醒。"
+        .. (old and "原方案已备份，可回滚。" or "") .. skippedText(self.skipped))
+    return true
+end
+
+-- Pause/rollback always address this specialization's last saved plan.
+function UI:LastSaved()
+    local spec = NR.GetIdentity().specID
+    local saved = type(NR.db.lastBySpec) == "table" and NR.db.lastBySpec[spec]
+    if saved then return saved end
+    local kind = NR.db.lastPlanKind
+    local last = kind == "dungeon" and NR.db.lastDungeon or kind == "events" and NR.db.lastEventPlan
+        or kind == "timeline3" and NR.db.lastTimelinePlan or NR.db.lastPlan
+    if type(last) == "table" and last.specID == spec then return NR.db end
+    self:Message("这个专精没有最近保存的方案")
 end
 
 function UI:SaveSettings()
@@ -211,7 +316,14 @@ function UI:SaveSettings()
     for key,value in pairs(self.soundValues or {}) do settings[key] = value end
     for key, control in pairs(self.checks) do settings[key] = control:GetChecked() and true or false end
     NR.db.settings = NR.Settings(settings)
+    self.settingsDirty = nil
     self:Message("设置已保存。团框发光填写 player 或玩家名字，用逗号分开；支持暴雪原生团框。")
+end
+
+-- A setting changed by hand but not saved yet: say so, rather than losing it silently.
+function UI:MarkDirty()
+    self.settingsDirty = true
+    if self.page == "settings" then self:Message(self:PageHint()) end
 end
 
 -- Dropdown of our voice clips, opening upward (there is no room below the card); picking one previews it.
@@ -219,6 +331,7 @@ function UI:OpenSoundMenu(slot,owner)
     NR.Theme.Menu(owner,NR.Sounds.List(),self.soundValues[slot],function(entry)
         self:SetSoundChoice(slot,entry.key)
         NR.Sounds.Play(entry.key)
+        self:MarkDirty()
     end,true)
 end
 
@@ -228,82 +341,119 @@ function UI:SetSoundChoice(slot,key)
     self.soundPicks[slot]:SetText(entry.name)
 end
 
+-- Settings card summary; the list itself is edited, and saved at once, on its own page.
+function UI:PaintBursts()
+    local spec = NR.GetIdentity().specID
+    if not spec then self.burstSummary:SetText("选择专精后可编辑"); return end
+    local ids, custom = NR.BurstSpells.Get(spec)
+    self.burstSummary:SetText(NR.SpecName(spec) .. " · " .. #ids .. " 个技能 · " .. (custom and "我的名单" or "内置默认")
+        .. "\n用于未配置首领的默认提醒和新方案导入过滤")
+end
+
+local GUIDE = "① 左侧粘贴方案文本\n② 点“检查方案”，这里会列出首领、提醒条数和需要你确认的阶段\n③ 确认无误后“保存并启用”；想先看效果可“播放预览”"
+
+-- The import card follows the text: Lorrgs options only for Lorrgs text, save and preview only for
+-- exactly the text (and options) that passed the check.
+function UI:PaintImport()
+    if not self.saveButton then return end
+    local text = self.note:GetText() or ""
+    local format = formatOf(text)
+    local plan = self:CurrentPlan()
+    self.formatLabel:SetText(format and "识别为：" .. FORMAT[format] or "粘贴后自动识别格式")
+    if format == "note" then self.noteOptions:Show() else self.noteOptions:Hide() end
+    self.summary:ClearAllPoints(); self.summary:SetPoint("TOPLEFT", 20, format == "note" and -148 or -64)
+    self.summary:SetHeight(format == "note" and 84 or 280)
+    local status, tone = "待检查", "muted"
+    if plan then status, tone = self.saved == plan and "已保存并启用" or "检查通过", "positive"
+    elseif format and self.checkedText then
+        status, tone = self.parseError and self.checkedText == text and "未通过" or "需重新检查", "warning"
+    end
+    self.status:SetText(status, tone)
+    if not format then
+        self.summary:SetText(GUIDE); self.bindingScroll:Hide(); self.bindingTitle:Hide()
+    end
+    self.saveButton:SetEnabled(plan ~= nil and self.saved ~= plan)
+    self.playPreview:SetEnabled(plan ~= nil)
+    self.checkButton.themeStyle = plan and "outline" or "primary"; self.checkButton:Paint()
+end
+
+function UI:OpenLibrary()
+    local ok, err = NR.PreviewUI:OpenLibrary()
+    if not ok then self:Message(err) end
+end
+
 function UI:SetPage(name)
+    if NR.BurstUI and NR.BurstUI.frame then NR.BurstUI.frame:Hide() end
     self.page = name
+    self.tabs:Show()
     self.importPage:Hide(); self.settingsPage:Hide()
-    if name == "settings" then self.settingsPage:Show()
-    else self.importPage:Show() end
+    if name == "settings" then self.settingsPage:Show(); self:PaintBursts()
+    else self.importPage:Show(); self:PaintImport() end
     self.importTab:SetSelected(name == "import"); self.settingsTab:SetSelected(name == "settings")
-    self.railImport:SetSelected(name == "import"); self.railSettings:SetSelected(name == "settings")
     if self.note then self.note:ClearFocus() end
     -- The status line is shared by both pages; don't leave one page's hint on the other.
     if self.message then self:Message(self:PageHint()) end
 end
 
+function UI:ToggleEnabled()
+    if InCombatLockdown() then self:Message("请脱战后切换提醒总开关"); return end
+    NR.db.enabled = NR.db.enabled == false
+    self:PaintEnable()
+end
+
 function UI:PaintEnable()
     local on=NR.db.enabled~=false
-    self.enableButton:SetText(on and "提醒已开启" or "提醒已停用")
-    self.enableButton.themeStyle=on and "primary" or "outline"; self.enableButton:Paint()
+    for _, switch in ipairs(self.switches) do
+        switch:SetText(on and "提醒已开启" or "提醒已停用")
+        switch.themeStyle=on and "primary" or "outline"; switch:Paint()
+    end
 end
 
-function UI:ShowMemory(before)
-    local now=NR.MemoryKB()
-    if not now then self.memoryLabel:SetText("插件占用：游戏未提供"); return end
-    self.memoryLabel:SetText(before and string.format("%.0f KB → %.0f KB",before,now) or string.format("插件占用 %.0f KB",now))
-end
+-- Every window (main, playback) is the same size and shares one top bar: brand and spec on the left,
+-- the master switch on the right; the centre holds the page tabs or a back button.
+local W, H, X, CW = 1180, 740, 24, 1132
+UI.W, UI.H = W, H
 
--- Layout: icon rail on the left, brand + page tabs + switch + close along the top, white cards on a grey canvas.
-local W, H, X, CW = 1040, 700, 104, 912
+function UI:Chrome(frame)
+    frame.brand:SetWidth(320)
+    local sub = label(frame.header,"",24,-58,360,"tiny")
+    local switch = button(frame.header,"提醒已开启",140,W-72-148,-18,function() self:ToggleEnabled() end,"primary","power")
+    self.switches[#self.switches+1] = switch
+    return sub, switch
+end
 
 function UI:Create()
     local T = NR.Theme
     local frame = T.Window("NextRemindersWindow",W,H,"NextReminders")
     self.frame = frame
-    local header = frame.header
-    frame.brand:ClearAllPoints(); frame.brand:SetPoint("TOPLEFT",X,-22); frame.brand:SetWidth(200)
-    self.dataVersion = label(header,"",X,-52,260,"tiny")
-    local rail = T.Panel(frame,16,-16,72,H-32,"panel",{radius=36,shadow=false})
-    local logo = rail:CreateTexture(nil,"ARTWORK"); logo:SetTexture(T.media.."ui_logo.tga"); logo:SetSize(44,44); logo:SetPoint("TOP",0,-14)
-    self.railImport = T.IconButton(rail,"import",44,14,-92,function() self:SetPage("import") end,"方案导入")
-    self.railSettings = T.IconButton(rail,"settings",44,14,-148,function() self:SetPage("settings") end,"提醒设置")
-    self.railPreview = T.IconButton(rail,"play",44,14,-204,function() SlashCmdList.NEXTREMINDERS("preview") end,"播放最近方案")
-    local tabs = T.Panel(header,404,-14,232,48,"panel",{radius=24,shadow=false})
+    self.switches = {}
+    self.dataVersion, self.enableButton = self:Chrome(frame)
+    local tabs = T.Panel(frame.header,(W-232)/2,-14,232,48,"panel",{radius=24,shadow=false})
+    self.tabs = tabs
     self.importTab = button(tabs,"方案导入",108,6,-6,function() self:SetPage("import") end,"ghost")
     self.settingsTab = button(tabs,"提醒设置",108,118,-6,function() self:SetPage("settings") end,"ghost")
-    self.enableButton=button(header,"提醒已开启",140,W-60-12-140,-20,function()
-        if InCombatLockdown() then self:Message("请脱战后切换提醒总开关"); return end
-        NR.db.enabled=NR.db.enabled==false
-        self:PaintEnable()
-    end,"primary","power")
     self.importPage = CreateFrame("Frame",nil,frame); self.importPage:SetAllPoints(frame)
     self.settingsPage = CreateFrame("Frame",nil,frame); self.settingsPage:SetAllPoints(frame)
 
+    -- Import: paste on the left; the check result, and the actions it unlocks, on the right.
     local page = self.importPage
-    label(page,"导入提醒方案",X,-88,600,"title")
-    label(page,"大秘境粘贴网站生成的整副本方案；团本粘贴 Lorrgs MRT／NSRT 文本。先检查，再保存启用。",X,-124,CW,"muted")
-    local options = T.Panel(page,X,-160,CW,72)
-    label(options,"首领编号（MRT）",20,-27,120,"small")
-    self.encounter = edit(options,120,136,-18)
-    label(options,"使用难度",284,-27,70,"small")
-    self.difficulty = "source"
-    self.difficultyButton = button(options,"随导出",180,350,-18,function()
-        local order = { source="heroic",heroic="normal",normal="mythic",mythic="source" }
-        self.difficulty = order[self.difficulty]
-        self.difficultyButton:SetText(({source="随导出",heroic="英雄",normal="普通",mythic="史诗／大秘境"})[self.difficulty])
-        self.preview = nil
-    end,"field")
-    self.personal = check(options,"作为我的个人方案",560,-24); self.personal:SetChecked(true)
+    label(page,"导入提醒方案",X,-92,600,"title")
+    label(page,"史诗钥石粘贴网站生成的方案；团本粘贴 Lorrgs 的 MRT／NSRT 文本。",X,-128,760,"muted")
+    self.libraryButton = button(page,"已导入方案 / 回放",200,W-X-200,-96,function() self:OpenLibrary() end,nil,"play")
 
-    local noteCard = T.Panel(page,X,-248,448,340)
+    local noteCard = T.Panel(page,X,-164,660,476)
     label(noteCard,"方案文本",20,-18,200,"heading")
-    self.noteFocus = label(noteCard,"点击输入",340,-21,88,"small"); self.noteFocus:SetJustifyH("RIGHT")
-    local notePanel = T.Panel(noteCard,16,-52,416,272,"input",{radius=14})
+    self.noteFocus = label(noteCard,"点击输入",552,-21,88,"small"); self.noteFocus:SetJustifyH("RIGHT")
+    local notePanel = T.Panel(noteCard,16,-52,628,352,"input",{radius=14})
     self.notePanel = notePanel
-    self.noteHint = label(notePanel,"点击这里，按 Ctrl+V 粘贴方案",16,-16,380,"muted")
-    local scroll = T.Scroll(page,X+24,-308,384,256)
+    self.noteHint = label(notePanel,"点击这里，按 Ctrl+V 粘贴方案",16,-16,560,"muted")
+    -- Keep the viewport above the input surface. A sibling of noteCard inherits
+    -- a lower frame level and can put the editor/caret behind notePanel.
+    local scroll = T.Scroll(notePanel,8,-8,596,336)
     self.note = CreateFrame("EditBox",nil,scroll)
-    self.note:SetMultiLine(true); self.note:SetFontObject(GameFontHighlight); T.Font(self.note,"body"); self.note:SetWidth(376)
-    self.note:SetHeight(255); self.note:SetMaxLetters(200000); self.note:SetAutoFocus(false)
+    self.note:SetPoint("TOPLEFT",scroll,"TOPLEFT",0,0)
+    self.note:SetMultiLine(true); self.note:SetFontObject(GameFontHighlight); T.Font(self.note,"body"); self.note:SetWidth(588)
+    self.note:SetHeight(335); self.note:SetMaxLetters(200000); self.note:SetAutoFocus(false)
     self.note:SetTextColor(unpack(T.colors.text))
     self.note:EnableMouse(true); self.note:SetTextInsets(4,4,4,4)
     self.note:SetJustifyH("LEFT"); self.note:SetJustifyV("TOP"); self.note:SetBlinkSpeed(0.5)
@@ -361,126 +511,156 @@ function UI:Create()
     self.note:SetScript("OnTextChanged",function(editor)
         -- Keep the last native layout: cursor callbacks may precede text callbacks.
         local _,lines=editor:GetText():gsub("\n","")
-        editor:SetHeight(math.max(255,(lines+2)*16))
+        editor:SetHeight(math.max(335,(lines+2)*16))
         paintFocus(editor:HasFocus())
+        self:PaintImport()
     end)
     scroll:SetScrollChild(self.note)
     self.note:SetScript("OnHide",function(editor) editor:ClearFocus(); stopCaret() end)
     self.note:SetText(""); self.note:SetCursorPosition(0)
     page:SetScript("OnHide",function() self.note:ClearFocus() end)
     paintFocus(false)
+    self.formatLabel = label(noteCard,"",20,-428,460,"small")
+    self.checkButton = button(noteCard,"检查方案",140,504,-418,function() self:Parse() end,"primary","check")
 
-    local checkPanel = T.Panel(page,X+464,-248,448,340)
-    label(checkPanel,"方案检查",20,-18,300,"heading")
-    self.summary = label(checkPanel,"粘贴文本后，点击“检查导入”。",20,-56,408,"muted")
-    self.summary:SetHeight(120)
-    self.bindingTitle=label(checkPanel,"阶段绑定",20,-188,408,"small")
-    self.bindingScroll=T.Scroll(page,X+484,-460,400,112)
-    self.bindingContent=CreateFrame("Frame",nil,self.bindingScroll); self.bindingContent:SetSize(380,112)
+    local checkCard = T.Panel(page,X+676,-164,456,476)
+    label(checkCard,"检查结果",20,-18,240,"heading")
+    self.status = T.Pill(checkCard,-16,-14)
+    -- Only Lorrgs text needs these: MRT carries no boss, and either may be reused on another difficulty.
+    local options = CreateFrame("Frame",nil,checkCard)
+    options:SetPoint("TOPLEFT",0,-52); options:SetSize(456,88)
+    self.noteOptions = options
+    label(options,"首领编号",20,-10,80,"small")
+    self.encounter = edit(options,100,92,-2)
+    self.encounter:SetScript("OnTextChanged",function() self:PaintImport() end)
+    label(options,"使用难度",212,-10,70,"small")
+    self.difficulty = "source"
+    self.difficultyButton = button(options,"随导出",156,280,-2,function()
+        local order = { source="heroic",heroic="normal",normal="mythic",mythic="source" }
+        self.difficulty = order[self.difficulty]
+        self.difficultyButton:SetText(({source="随导出",heroic="英雄",normal="普通",mythic="史诗／史诗钥石"})[self.difficulty])
+        self.preview = nil
+        self:PaintImport()
+    end,"field")
+    self.personal = check(options,"作为我的个人方案",20,-50); self.personal:SetChecked(true)
+    self.personal:HookScript("OnClick",function() self:PaintImport() end)
+    self.summary = label(checkCard,"",20,-64,416,"muted")
+    self.bindingTitle=label(checkCard,"阶段绑定：点击切换；右侧可填开打后转阶段时间（如 2:15）",20,-240,416,"small")
+    self.bindingScroll=T.Scroll(checkCard,20,-262,400,92)
+    self.bindingContent=CreateFrame("Frame",nil,self.bindingScroll); self.bindingContent:SetSize(380,92)
     self.bindingScroll:SetScrollChild(self.bindingContent)
     self.bindingTitle:Hide(); self.bindingScroll:Hide()
 
-    button(page,"检查导入",112,X,-606,function() self:Parse() end,nil,"check")
-    self.saveButton = button(page,"保存并启用",132,X+124,-606,function() self:Save() end,"primary")
-    self.playPreview = button(page,"播放预览",128,X+268,-606,function() self:Play() end,nil,"play")
-    self.pausePlan = button(page,"暂停方案",120,X+408,-606,function()
+    self.saveButton = button(checkCard,"保存并启用",200,20,-368,function() self:Save() end,"primary","check")
+    self.playPreview = button(checkCard,"播放预览",204,232,-368,function() self:Play() end,nil,"play")
+    -- Pause and rollback act on the plan this spec saved last, whatever the box holds now.
+    label(checkCard,"最近导入",20,-428,70,"small")
+    self.pausePlan = button(checkCard,"暂停",156,96,-418,function()
         if InCombatLockdown() then self:Message("请脱战后操作") return end
-        if NR.db.lastPlanKind=="timeline3" then
-            local ok,err=NR.TimelinePlans.Pause(NR.db.lastTimelinePlan)
+        local saved=self:LastSaved(); if not saved then return end
+        if saved.lastPlanKind=="timeline3" then
+            local ok,err=NR.TimelinePlans.Pause(saved.lastTimelinePlan)
             self:Message(ok and "时间轴已暂停；旧方案仍保留" or err); return
         end
-        if NR.db.lastPlanKind=="dungeon" then
-            local ok,err=NR.EventPlans.PauseDungeon(NR.db.lastDungeon)
+        if saved.lastPlanKind=="dungeon" then
+            local ok,err=NR.EventPlans.PauseDungeon(saved.lastDungeon)
             self:Message(ok and "最近导入的整副本方案已暂停" or err);return
         end
-        if NR.db.lastPlanKind=="events" and NR.db.lastEventPlan then
-            local last=NR.db.lastEventPlan
+        if saved.lastPlanKind=="events" and saved.lastEventPlan then
+            local last=saved.lastEventPlan
             local plan=NR.EventPlans.Find(last.specID,last.encounterID,last.difficulty)
             if plan then plan.enabled=false; self:Message("最近保存的事件方案已暂停") end
             return
         end
-        local key=NR.db.lastPlan
-        if key and NR.db.plans[key] then NR.db.plans[key].enabled=false; self:Message("最近保存的方案已暂停") end
+        local last=saved.lastPlan
+        local notes=type(last)=="table" and NR.NotePlans(last.specID)
+        local plan=notes and notes.plans[last.key]
+        if plan then plan.enabled=false; self:Message("最近保存的方案已暂停") end
     end,nil,"pause")
-    self.rollback = button(page,"回滚",88,X+540,-606,function()
+    self.rollback = button(checkCard,"回滚到旧版",172,264,-418,function()
         if InCombatLockdown() then self:Message("请脱战后操作") return end
-        if NR.db.lastPlanKind=="timeline3" then
-            local ok,err=NR.TimelinePlans.Rollback(NR.db.lastTimelinePlan)
+        local saved=self:LastSaved(); if not saved then return end
+        if saved.lastPlanKind=="timeline3" then
+            local ok,err=NR.TimelinePlans.Rollback(saved.lastTimelinePlan)
             self:Message(ok and "已交换时间轴方案与备份" or err); return
         end
-        if NR.db.lastPlanKind=="dungeon" then
-            local ok,err=NR.EventPlans.RollbackDungeon(NR.db.lastDungeon)
+        if saved.lastPlanKind=="dungeon" then
+            local ok,err=NR.EventPlans.RollbackDungeon(saved.lastDungeon)
             self:Message(ok and "已交换整副本规则和备份" or err);return
         end
-        if NR.db.lastPlanKind=="events" then
-            local ok,err=NR.EventPlans.Rollback(NR.db.lastEventPlan)
+        if saved.lastPlanKind=="events" then
+            local ok,err=NR.EventPlans.Rollback(saved.lastEventPlan)
             self:Message(ok and "已交换当前事件方案和备份" or err); return
         end
-        local key=NR.db.lastPlan
-        if key and NR.db.previousPlans[key] then
-            NR.db.plans[key],NR.db.previousPlans[key]=NR.db.previousPlans[key],NR.db.plans[key]
+        local last=saved.lastPlan
+        local notes=type(last)=="table" and NR.NotePlans(last.specID)
+        local key=notes and last.key
+        if key and notes.previous[key] then
+            notes.plans[key],notes.previous[key]=notes.previous[key],notes.plans[key]
             self:Message("已交换当前方案和备份方案")
         else self:Message("没有可回滚的方案") end
     end)
 
     page = self.settingsPage
-    label(page,"提醒与声音",X,-88,600,"title")
-    label(page,"调整显示时机、声音和指定玩家的团框发光。修改后点“保存设置”。",X,-124,CW,"muted")
+    label(page,"提醒与声音",X,-92,600,"title")
+    label(page,"调整显示时机和声音。修改后点“保存设置”；爆发技能在编辑页即时保存。",X,-128,CW,"muted")
+    local function dirty(_,userInput) if userInput then self:MarkDirty() end end
     -- Text belongs to the card it sits on: a child frame's textures cover its parent's own font strings.
     local function figure(x,title,unit,hint)
-        local card=T.Panel(page,x,-160,296,132)
+        local card=T.Panel(page,x,-164,366,132)
         label(card,title,20,-18,200,"small")
         local box=edit(card,120,20,-44,"number")
+        box:SetScript("OnTextChanged",dirty)
         label(card,unit,152,-60,120,"muted")
-        label(card,hint,20,-102,256,"tiny")
+        label(card,hint,20,-102,326,"tiny")
         return box
     end
     self.lead=figure(X,"提前显示","秒","技能时点前多久出现提醒")
-    self.window=figure(X+308,"时点后保留","秒","到点后没按，提醒再留多久")
-    self.volume=figure(X+616,"语音音量","0～100","技能语音和倒数的音量")
+    self.window=figure(X+383,"时点后保留","秒","到点后没按，提醒再留多久")
+    self.volume=figure(X+766,"语音音量","0～100","技能语音和倒数的音量")
 
-    local toggles = T.Panel(page,X,-308,448,168)
+    local toggles = T.Panel(page,X,-312,558,168)
     label(toggles,"提醒开关",20,-18,300,"heading")
     self.checks = {
-        hideOnUse=check(toggles,"用过撤提醒",20,-56), tts=check(toggles,"技能语音",232,-56),
-        countdown=check(toggles,"3 秒倒数",20,-92), sound=check(toggles,"提示音效",232,-92),
+        hideOnUse=check(toggles,"用过撤提醒",20,-56), tts=check(toggles,"技能语音",290,-56),
+        countdown=check(toggles,"3 秒倒数",20,-92), sound=check(toggles,"提示音效",290,-92),
     }
-    self.checks.autoBurst=check(toggles,"大秘境没配置的首领：开打和每次爆发好了都提醒",20,-128)
-    for _,control in pairs(self.checks) do control.text:SetWidth(150) end
-    self.checks.autoBurst.text:SetWidth(370)
+    self.checks.autoBurst=check(toggles,"未配置的大秘境首领：开打和每次爆发好了都提醒",20,-128)
+    for _,control in pairs(self.checks) do
+        control.text:SetWidth(200); control:HookScript("OnClick",function() self:MarkDirty() end)
+    end
+    self.checks.autoBurst.text:SetWidth(470)
 
-    local sounds = T.Panel(page,X+464,-308,448,168)
+    local sounds = T.Panel(page,X+574,-312,558,168)
     label(sounds,"提示音效",20,-18,300,"heading")
     self.soundPicks = {}
     local pick
-    pick = button(sounds,"",300,20,-52,function() self:OpenSoundMenu("soundChoice",pick) end,"field")
+    pick = button(sounds,"",400,20,-52,function() self:OpenSoundMenu("soundChoice",pick) end,"field")
     self.soundPicks.soundChoice=pick
-    button(sounds,"试听",96,332,-52,function()
+    button(sounds,"试听",106,432,-52,function()
         if not NR.Sounds.Play(self.soundValues.soundChoice) then self:Message("当前选的是「不播放」。") end
     end,nil,"sound")
-    label(sounds,"到点时播放一次（先 3、2、1 倒数）；几条同时到点只放一次。",20,-104,408,"tiny"):SetHeight(40)
+    label(sounds,"到点时播放一次（先 3、2、1 倒数）；几条同时到点只放一次。",20,-104,518,"tiny"):SetHeight(40)
 
-    local glow = T.Panel(page,X,-492,600,96)
+    local glow = T.Panel(page,X,-496,558,112)
     label(glow,"团框发光",20,-18,200,"heading")
-    self.glow=edit(glow,300,20,-46)
-    label(glow,"填 player 或玩家名字，多个名字用逗号分隔；支持暴雪原生队伍／团队框。",336,-48,244,"tiny"):SetHeight(34)
-    local memory = T.Panel(page,X+616,-492,296,96)
-    label(memory,"内存",20,-18,120,"heading")
-    self.memoryLabel = label(memory,"",20,-56,140,"small")
-    self.cleanButton = button(memory,"清理内存",116,160,-46,function()
-        local before=NR.MemoryKB()
-        local ok,err=NR.Cleanup("manual")
-        if not ok then self:Message(err); return end
-        self:ShowMemory(before)
-        self:Message("已停止播放中的语音，释放插件用完的数据。")
-    end,nil,"clean")
+    self.glow=edit(glow,300,20,-52)
+    self.glow:SetScript("OnTextChanged",dirty)
+    label(glow,"填 player 或玩家名字，多个用逗号分隔；支持暴雪原生队伍／团队框。",336,-52,202,"tiny"):SetHeight(40)
 
-    self.saveSettings = button(page,"保存设置",140,W-24-140,-606,function() self:SaveSettings() end,"primary","check")
-    self.message=label(frame,"",X,-652,CW,"small"); self.message:SetHeight(36)
-    -- Personal policy is authored on the website; no in-game rule editor is created.
+    local bursts = T.Panel(page,X+574,-496,558,112)
+    label(bursts,"大秘境默认爆发",20,-18,256,"heading")
+    T.Pill(bursts,-16,-14):SetText("即时保存")
+    self.burstSummary = label(bursts,"",20,-52,340,"small"); self.burstSummary:SetHeight(40)
+    self.burstButton = button(bursts,"编辑技能",160,378,-58,function() NR.BurstUI:Open() end,"primary")
+
+    button(page,"查看方案回放",160,X,-626,function() self:OpenLibrary() end,nil,"play")
+    self.saveSettings = button(page,"保存设置",160,W-X-160,-626,function() self:SaveSettings() end,"primary","check")
+    self.message=label(frame,"",X,-684,CW,"small"); self.message:SetHeight(36)
+    -- Boss timelines remain separate from the per-spec automatic spell list.
     self:SetPage("import")
     frame:Hide(); frame:SetScript("OnShow",function() self:Refresh() end)
-    -- Closing the window is "done for now": free what the session left behind.
+    -- Closing the window stops leftover playback and clears temporary reminder state.
     frame:SetScript("OnHide",function() NR.Cleanup("close") end)
 end
 

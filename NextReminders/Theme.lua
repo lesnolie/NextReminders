@@ -286,6 +286,30 @@ function T.Window(name,width,height,title,subtitle)
     return frame
 end
 
+-- Put `frame` where `source` is, so moving between same-sized windows doesn't make the panel jump.
+function T.Follow(frame,source)
+    local x,y=source:GetCenter()
+    if not (NR.Number(x,-100000,100000) and NR.Number(y,-100000,100000)) then return end
+    frame:ClearAllPoints(); frame:SetPoint("CENTER",UIParent,"BOTTOMLEFT",x,y)
+end
+
+-- Small status tag pinned by its top right corner (e.g. "即时保存", "检查通过").
+function T.Pill(parent,x,y)
+    local pill=CreateFrame("Frame",nil,parent)
+    pill:SetPoint("TOPRIGHT",x,y); pill:SetSize(80,26)
+    T.Surface(pill,"soft",{radius=13,border="soft"})
+    pill.text=T.Label(pill,"",0,-6,200,"tiny"); pill.text:ClearAllPoints(); pill.text:SetPoint("CENTER")
+    pill.text:SetHeight(14); pill.text:SetJustifyH("CENTER")
+    function pill:SetText(value,tone)
+        self.text:SetText(value)
+        local measured=self.text:GetStringWidth()
+        local width=NR.Number(measured,1,1000) and measured or select(2,value:gsub("[^\128-\191]",""))*11
+        self.text:SetWidth(width+4); self:SetWidth(width+28)
+        self.text:SetTextColor(unpack(T.colors[tone or "muted"]))
+    end
+    return pill
+end
+
 -- Light dropdown list beside a field button (below it, or above when `above`). One shared frame; items are {key,name};
 -- onPick(item) runs on a click.
 -- Closes on a pick, on a click anywhere else, or when its window hides.

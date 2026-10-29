@@ -113,6 +113,16 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
                 end
             end
         end
+        local readyOwners={}
+        for _,row in ipairs(self.rows) do
+            if row.after=="ready" then readyOwners[row.spellID]=row.id end
+        end
+        for _,row in ipairs(self.rows) do
+            row.readyStart=row.spellID and (row.anchor=="start" or row.anchor=="pull") and row.time==0
+            if row.readyStart and not readyOwners[row.spellID] then
+                row.after="ready"; readyOwners[row.spellID]=row.id
+            end
+        end
         self.bossEvents:Fire("start",now,now,false)
         if self.timelinePlan then
             local _,rules=NR.BossRules.For(encounterID,difficulty)
@@ -143,7 +153,9 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
             self.lastReadyPoll=now
             for id,watch in pairs(self.readyWatches) do
                 local state=(readyReader or NR.Ready.State)(watch.row.spellID)
-                if state=="cooling" then watch.armed=true
+                if watch.waiting then
+                    if state=="ready" then self:CooldownReady(id,now) end
+                elseif state=="cooling" then watch.armed=true
                 elseif state=="ready" and watch.armed then self:CooldownReady(id,now) end
             end
         end
@@ -156,10 +168,21 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
         end
         for _, row in ipairs(self.rows) do
             local anchor = not row.eventRow and (self.anchorTimes[row.anchor] or fallbackPull and row.fallback and fallbackPull + row.fallback)
-            local target=row.eventRow and row.target or anchor and anchor+row.time
+            local target=(row.eventRow or row.postReady) and row.target or anchor and anchor+row.time
             if target and not row.done then
                 row.target = target
-                if (row.eventRow and now>=row.target+row.window) or (not row.eventRow and now>row.target+self.settings.window) then
+                local spellID=row.useSpellID or row.spellID
+                local state=spellID and self:SpellState(spellID,now)
+                if self.readyWatches[row.id] and self.readyWatches[row.id].waiting then
+                    -- An unavailable opener has no expiry until its first ready signal.
+                elseif now>=row.target-self.settings.lead and spellID and state~="ready" then
+                    row.done=true
+                    if row.shown then row.shown=false; self.emit("hide",row) end
+                    if row.readyStart and not row.used and not row.postReady then
+                        self.readyWatches[row.id]={row=row,waiting=true}
+                    end
+                    self:Log("skip-unavailable",spellID,now)
+                elseif (row.eventRow and now>=row.target+row.window) or (not row.eventRow and now>row.target+self.settings.window) then
                     row.done = true
                     if row.shown then row.shown = false; self.emit("hide", row) end
                 elseif now >= row.target - self.settings.lead then
@@ -179,6 +202,13 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
         end
     end
 
+    function engine:SpellState(spellID,now)
+        local state=(readyReader or NR.Ready.State)(spellID)
+        if state then return state end
+        local observed=self.readyObservations[spellID]
+        if observed and now-observed.time<=0.5 then return observed.state end
+    end
+
     function engine:Cast(spellID, now)
         if not self.active or not NR.Number(spellID, 1, 10000000) then return end
         for _, row in ipairs(self.rows) do
@@ -196,7 +226,7 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
     end
 
     function engine:WatchReady(row,now)
-        if row.after=="ready" and row.eventCount==1 and row.target then
+        if row.after=="ready" and (row.eventCount==1 or row.readyStart) and row.target then
             local observed=self.readyObservations[row.spellID]
             local armed=observed and observed.state=="cooling" and now-observed.time<=0.5
             self.readyWatches[row.id]={row=row,armed=armed and true or false}
@@ -208,24 +238,31 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
         if not self.active then return end
         local seen={}
         for _,row in ipairs(self.rows) do
-            if row.after=="ready" and not seen[row.spellID] then
-                seen[row.spellID]=true
-                local state=(readyReader or NR.Ready.State)(row.spellID,true)
-                self.readyObservations[row.spellID]={state=state,time=now}
+            local spellID=row.useSpellID or row.spellID
+            if spellID then
+                if not seen[spellID] then
+                    seen[spellID]=true
+                    self.readyObservations[spellID]={state=(readyReader or NR.Ready.State)(spellID,true),time=now}
+                end
+                local state=self.readyObservations[spellID].state
                 local watch=self.readyWatches[row.id]
                 if watch then
-                    if state=="cooling" then watch.armed=true
+                    if watch.waiting then
+                        if state=="ready" then self:CooldownReady(row.id,now) end
+                    elseif state=="cooling" then watch.armed=true
                     elseif state=="ready" and watch.armed then self:CooldownReady(row.id,now) end
                 end
             end
         end
+        self:Tick(now)
     end
 
     function engine:CooldownReady(id,now)
         local watch=self.readyWatches[id]
         if not self.active or not watch then return false end
-        watch.armed=false
+        watch.armed,watch.waiting=false,false
         local row=watch.row
+        if row.after~="ready" then self.readyWatches[id]=nil end
         if row.shown then self.emit("hide",row) end
         row.target,row.done,row.shown,row.used,row.lastCountdown=now,false,false,false,nil
         row.postReady=true
@@ -249,7 +286,7 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
                     if row.shown then self.emit("hide",row); row.shown=false end
                     row.target=nil
                     if row.hold and not row.used then row.held=true; self.emit("hold",row) end
-                elseif not row.used and not self.readyWatches[row.id] then
+                elseif not row.used and not self.readyWatches[row.id] and not (same and row.done) then
                     row.target,row.done,row.predicted=record.at+row.time,false,record.predicted
                 end
             end
