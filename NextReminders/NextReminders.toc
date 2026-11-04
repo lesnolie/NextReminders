@@ -3,7 +3,7 @@
 ## Notes: Lorrgs personal reminders and public encounter timeline phase detection.
 ## Author: Leslie
 ## IconTexture: Interface\AddOns\NextReminders\Media\ui_logo
-## Version: 0.3.12-dev
+## Version: 0.3.13-dev
 ## SavedVariables: NextRemindersDB
 ## OptionalDeps: BigWigs
 

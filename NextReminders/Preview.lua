@@ -410,7 +410,7 @@ function NR.Preview.New(emit, clear, blocked)
     function p:NextReminder(now)
         if not self.running then return nil, "请先开始播放" end
         self:Tick(now)
-        local lead, best = self.settings.lead
+        local lead, best = NR.ShowLead(self.settings)
         for _, at in pairs(self.expected) do
             local show = math.max(0, at - lead - 1)
             if show > self.position + 0.05 and (not best or show < best) then best = show end

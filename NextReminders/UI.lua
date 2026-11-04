@@ -11,9 +11,8 @@ function UI:Refresh()
     self:PaintBursts(); self:PaintImport()
     if self.returning then self.returning=nil; self:PaintEnable(); self:Message(self:PageHint()); return end
     local s = NR.db.settings
-    self.lead:SetText(tostring(s.lead)); self.window:SetText(tostring(s.window)); self.glow:SetText(s.glow)
+    self.lead:SetText(tostring(s.lead)); self.window:SetText(tostring(s.window))
     for key, control in pairs(self.checks) do control:SetChecked(s[key]) end
-    self.volume:SetText(tostring(s.volume))
     self.soundValues = {}
     for key in pairs(self.soundPicks) do self:SetSoundChoice(key,s[key]) end
     self.settingsDirty=nil
@@ -307,17 +306,17 @@ end
 
 function UI:SaveSettings()
     if InCombatLockdown() then self:Message("请脱战后修改设置") return end
-    local lead, window, volume = tonumber(self.lead:GetText()), tonumber(self.window:GetText()), tonumber(self.volume:GetText())
-    if not NR.Number(lead, 0, 60) or not NR.Number(window, 0, 60) or not NR.Number(volume, 0, 100) then
-        self:Message("提前量／保留时间需为 0～60 秒，音量需为 0～100") return
+    local lead, window = tonumber(self.lead:GetText()), tonumber(self.window:GetText())
+    if not NR.Number(lead, 0, 60) or not NR.Number(window, 0, 60) then
+        self:Message("提前量／保留时间需为 0～60 秒") return
     end
     local settings = NR.Copy(NR.db.settings)
-    settings.lead, settings.window, settings.volume, settings.glow = lead, window, volume, self.glow:GetText()
+    settings.lead, settings.window = lead, window
     for key,value in pairs(self.soundValues or {}) do settings[key] = value end
     for key, control in pairs(self.checks) do settings[key] = control:GetChecked() and true or false end
     NR.db.settings = NR.Settings(settings)
     self.settingsDirty = nil
-    self:Message("设置已保存。团框发光填写 player 或玩家名字，用逗号分开；支持暴雪原生团框。")
+    self:Message("设置已保存。")
 end
 
 -- A setting changed by hand but not saved yet: say so, rather than losing it silently.
@@ -327,12 +326,29 @@ function UI:MarkDirty()
 end
 
 -- Dropdown of our voice clips, opening upward (there is no room below the card); picking one previews it.
+-- The list deletes clips on the spot (x on each row) and offers a restore row when any are deleted.
 function UI:OpenSoundMenu(slot,owner)
-    NR.Theme.Menu(owner,NR.Sounds.List(),self.soundValues[slot],function(entry)
+    local items={}
+    for _,entry in ipairs(NR.Sounds.List()) do
+        items[#items+1]=setmetatable({removable=entry.file~=nil},{__index=entry})
+    end
+    local deleted=NR.Sounds.HiddenCount()
+    if deleted>0 then items[#items+1]={key="__restore",name="恢复已删除的语音（"..deleted.."）"} end
+    local function reopen() local menu=NR.Theme.menuFrame; if menu then menu:Hide() end; self:OpenSoundMenu(slot,owner) end
+    NR.Theme.Menu(owner,items,self.soundValues[slot],function(entry)
+        if entry.key=="__restore" then NR.Sounds.RestoreAll(); self:SetSoundChoice(slot,self.soundValues[slot]); reopen(); return end
         self:SetSoundChoice(slot,entry.key)
         NR.Sounds.Play(entry.key)
         self:MarkDirty()
-    end,true)
+    end,true,function(entry)
+        NR.Sounds.Remove(entry.key)
+        -- Deleting the clip in use moves the choice (and the saved setting) to the next one still listed.
+        if self.soundValues[slot]==entry.key then
+            self:SetSoundChoice(slot,entry.key)
+            NR.db.settings[slot]=self.soundValues[slot]
+        end
+        reopen()
+    end)
 end
 
 function UI:SetSoundChoice(slot,key)
@@ -607,23 +623,22 @@ function UI:Create()
     local function dirty(_,userInput) if userInput then self:MarkDirty() end end
     -- Text belongs to the card it sits on: a child frame's textures cover its parent's own font strings.
     local function figure(x,title,unit,hint)
-        local card=T.Panel(page,x,-164,366,132)
+        local card=T.Panel(page,x,-164,558,132)
         label(card,title,20,-18,200,"small")
         local box=edit(card,120,20,-44,"number")
         box:SetScript("OnTextChanged",dirty)
         label(card,unit,152,-60,120,"muted")
-        label(card,hint,20,-102,326,"tiny")
+        label(card,hint,20,-102,518,"tiny")
         return box
     end
-    self.lead=figure(X,"提前显示","秒","技能时点前多久出现提醒")
-    self.window=figure(X+383,"时点后保留","秒","到点后没按，提醒再留多久")
-    self.volume=figure(X+766,"语音音量","0～100","技能语音和倒数的音量")
+    self.lead=figure(X,"提前显示","秒","技能时点前多久出现提醒；7 秒以上才念「准备爆发」")
+    self.window=figure(X+574,"时点后保留","秒","到点后没按，提醒再留多久")
 
     local toggles = T.Panel(page,X,-312,558,168)
     label(toggles,"提醒开关",20,-18,300,"heading")
     self.checks = {
-        hideOnUse=check(toggles,"用过撤提醒",20,-56), tts=check(toggles,"技能语音",290,-56),
-        countdown=check(toggles,"3 秒倒数",20,-92), sound=check(toggles,"提示音效",290,-92),
+        hideOnUse=check(toggles,"用过撤提醒",20,-56), sound=check(toggles,"提示音效",290,-56),
+        countdown=check(toggles,"语音倒数（准备爆发 5…1）",20,-92),
     }
     self.checks.autoBurst=check(toggles,"未配置的大秘境首领：开打和每次爆发好了都提醒",20,-128)
     for _,control in pairs(self.checks) do
@@ -640,19 +655,13 @@ function UI:Create()
     button(sounds,"试听",106,432,-52,function()
         if not NR.Sounds.Play(self.soundValues.soundChoice) then self:Message("当前选的是「不播放」。") end
     end,nil,"sound")
-    label(sounds,"到点时播放一次（先 3、2、1 倒数）；几条同时到点只放一次。",20,-104,518,"tiny"):SetHeight(40)
+    label(sounds,"到点时播放一次（先「准备爆发，5、4、3、2、1」）；几条同时到点只放一次。列表里点 × 删除不要的语音。",20,-104,518,"tiny"):SetHeight(40)
 
-    local glow = T.Panel(page,X,-496,558,112)
-    label(glow,"团框发光",20,-18,200,"heading")
-    self.glow=edit(glow,300,20,-52)
-    self.glow:SetScript("OnTextChanged",dirty)
-    label(glow,"填 player 或玩家名字，多个用逗号分隔；支持暴雪原生队伍／团队框。",336,-52,202,"tiny"):SetHeight(40)
-
-    local bursts = T.Panel(page,X+574,-496,558,112)
+    local bursts = T.Panel(page,X,-496,CW,112)
     label(bursts,"大秘境默认爆发",20,-18,256,"heading")
     T.Pill(bursts,-16,-14):SetText("即时保存")
     self.burstSummary = label(bursts,"",20,-52,340,"small"); self.burstSummary:SetHeight(40)
-    self.burstButton = button(bursts,"编辑技能",160,378,-58,function() NR.BurstUI:Open() end,"primary")
+    self.burstButton = button(bursts,"编辑技能",160,CW-180,-58,function() NR.BurstUI:Open() end,"primary")
 
     button(page,"查看方案回放",160,X,-626,function() self:OpenLibrary() end,nil,"play")
     self.saveSettings = button(page,"保存设置",160,W-X-160,-626,function() self:SaveSettings() end,"primary","check")

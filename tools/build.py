@@ -33,7 +33,7 @@ def build():
     documentation += sorted(p for p in (ROOT/"docs").glob("*.md") if p.name != "HANDOFF.md")
     documentation += sorted((ROOT/"docs").glob("ui-*.html")) + sorted((ROOT/"docs").glob("ui-*.png"))
     media = sorted(p for p in (SOURCE/"Media").glob("*") if p.suffix in (".ogg",".mp3",".tga"))
-    if not (SOURCE/"Media"/"burst_meow.ogg").exists(): raise ValueError("Voice pack Media/burst_meow.ogg missing")
+    if not (SOURCE/"Media"/"noel_press.ogg").exists(): raise ValueError("Voice pack Media/noel_press.ogg missing")
     inputs = files + media + documentation + [ROOT/"CONTEXT.md"]
     inputs += sorted(p for p in (ROOT/"tools").glob("*") if p.suffix in (".py",".mjs"))
     inputs += sorted(p for p in (ROOT/"tests").glob("*") if p.suffix in (".py", ".mjs"))

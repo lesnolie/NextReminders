@@ -314,7 +314,8 @@ end
 -- onPick(item) runs on a click.
 -- Closes on a pick, on a click anywhere else, or when its window hides.
 local MENU_ROW = 28
-function T.Menu(owner,items,current,onPick,above)
+-- onRemove(item), when given, adds a delete button to rows whose item.removable is true.
+function T.Menu(owner,items,current,onPick,above,onRemove)
     local menu=T.menuFrame
     if not menu then
         menu=CreateFrame("Frame",nil,UIParent)
@@ -341,10 +342,16 @@ function T.Menu(owner,items,current,onPick,above)
             row.hover=row:CreateTexture(nil,"BACKGROUND"); row.hover:SetAllPoints(); row.hover:SetColorTexture(unpack(T.colors.hover)); row.hover:Hide()
             row.mark=T.Icon(row,"check",14,"OVERLAY"); row.mark:SetPoint("RIGHT",-14,0); row.mark:SetVertexColor(unpack(T.colors.positive))
             row.caption=row:CreateFontString(nil,"OVERLAY","GameFontHighlight"); T.Font(row.caption,"body")
-            row.caption:SetPoint("LEFT",14,0); row.caption:SetPoint("RIGHT",-36,0); row.caption:SetJustifyH("LEFT"); row.caption:SetWordWrap(false)
+            row.caption:SetPoint("LEFT",14,0); row.caption:SetPoint("RIGHT",-62,0); row.caption:SetJustifyH("LEFT"); row.caption:SetWordWrap(false)
             row:SetScript("OnEnter",function(self) self.hover:Show() end)
             row:SetScript("OnLeave",function(self) self.hover:Hide() end)
             row:SetScript("OnClick",function(self) menu:Hide(); if menu.onPick then menu.onPick(self.item) end end)
+            row.remove=CreateFrame("Button",nil,row); row.remove:SetSize(22,22); row.remove:SetPoint("RIGHT",-36,0)
+            row.remove.icon=T.Icon(row.remove,"close",12,"OVERLAY"); row.remove.icon:SetPoint("CENTER")
+            row.remove.icon:SetVertexColor(unpack(T.colors.muted))
+            row.remove:SetScript("OnEnter",function(self) self.icon:SetVertexColor(unpack(T.colors.danger or T.colors.text)); row.hover:Show() end)
+            row.remove:SetScript("OnLeave",function(self) self.icon:SetVertexColor(unpack(T.colors.muted)) end)
+            row.remove:SetScript("OnClick",function() if menu.onRemove then menu.onRemove(row.item) end end)
             menu.rows[index]=row
         end
         row:ClearAllPoints(); row:SetPoint("TOPLEFT",menu,"TOPLEFT",6,-6-(index-1)*MENU_ROW); row:SetPoint("RIGHT",menu,"RIGHT",-6,0)
@@ -353,10 +360,11 @@ function T.Menu(owner,items,current,onPick,above)
         local selected=item.key==current
         row.caption:SetTextColor(unpack(T.colors[selected and "text" or "muted"]))
         if selected then row.mark:Show() else row.mark:Hide() end
+        if onRemove and item.removable then row.remove:Show() else row.remove:Hide() end
         row:Show()
     end
     for index=#items+1,#menu.rows do menu.rows[index]:Hide() end
-    menu.onPick=onPick
+    menu.onPick=onPick; menu.onRemove=onRemove
     menu:Show()
     return menu
 end

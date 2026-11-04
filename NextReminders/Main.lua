@@ -98,6 +98,20 @@ local function initialize()
     NR.db.enabled=NR.db.enabled~=false
     NR.db.eventPlans = type(NR.db.eventPlans)=="table" and NR.db.eventPlans or {}
     NR.db.settings = NR.Settings(NR.db.settings)
+    -- 0.3.13: the default clip became 诺艾尔, and meow / lyl_fire_2 / molly_fire_2 / molly_miss_2 left the pack.
+    -- A choice that is no longer in the pack moves to 诺艾尔; other picks stay.
+    local choice = NR.db.settings.soundChoice
+    if choice ~= "off" and not NR.Sounds.Exists(choice) then NR.db.settings.soundChoice = "noel_press" end
+    NR.db.soundDefault = 2
+    if type(NR.db.hiddenSounds) ~= "table" then NR.db.hiddenSounds = {} end
+    -- 0.3.13 defaults: lead 5→10, window 10→5, reminder sound on. Only values still on the old default move, once.
+    if (NR.db.defaultsVersion or 0) < 3 then
+        local s = NR.db.settings
+        if s.lead == 5 then s.lead = 10 end
+        if s.window == 10 then s.window = 5 end
+        if s.sound == false then s.sound = true end
+        NR.db.defaultsVersion = 3
+    end
     NR.Display:Create()
     NR.engine = NR.Engine.New(function(kind,row,value) NR.Display:Emit(kind,row,value) end)
     NR.preview = NR.Preview.New(function(kind,row,value)
@@ -123,10 +137,9 @@ local function initialize()
         elseif args == "test" then
             if InCombatLockdown() or NR.engine.active then NR.Print("请脱战后测试") return end
             -- A synthetic, valid encounter keeps the demo on the real validation/scheduling path.
-            NR.Display:CacheFrames()
             NR.preview:Start({enabled=true,encounterID=999999,difficulty="mythic",personal=true,phaseBindings={[1]="pull"},
-                rows={{id=1,spellID=51271,phase=1,time=5,tag="player"}}},NR.db.settings,identity(),GetTime())
-            NR.Print("测试冰霜之柱提醒；用过隐藏，或输入 /nr stop 停止。")
+                rows={{id=1,spellID=51271,phase=1,time=10,tag="player"}}},NR.db.settings,identity(),GetTime())
+            NR.Print("测试冰霜之柱提醒（10 秒后到点）；用过隐藏，或输入 /nr stop 停止。")
         elseif args == "plans" or args == "preview" then
             local ok,err = NR.PreviewUI:OpenLibrary(nil, args == "preview")
             if not ok then NR.Print(err) end
@@ -140,14 +153,13 @@ local function initialize()
         local now = GetTime()
         NR.preview:Tick(now)
         NR.engine:Tick(now)
-        NR.Display:RefreshGlows()
         NR.PreviewUI:Update()
     end)
     driver:RegisterEvent("ENCOUNTER_START"); driver:RegisterEvent("ENCOUNTER_END")
     driver:RegisterEvent("ENCOUNTER_WARNING")
     driver:RegisterEvent("SPELL_UPDATE_COOLDOWN")
     driver:RegisterUnitEvent("UNIT_SPELLCAST_SUCCEEDED","player")
-    driver:RegisterEvent("PLAYER_REGEN_ENABLED"); driver:RegisterEvent("GROUP_ROSTER_UPDATE")
+    driver:RegisterEvent("PLAYER_REGEN_ENABLED")
     driver:RegisterEvent("PLAYER_ENTERING_WORLD")
     driver:RegisterUnitEvent("PLAYER_SPECIALIZATION_CHANGED","player")
     driver:RegisterEvent("PLAYER_REGEN_DISABLED")
@@ -233,7 +245,6 @@ driver:SetScript("OnEvent", function(_, event, ...)
         if event=="PLAYER_ENTERING_WORLD" then migratePlans() end
         NR.preview:Stop(); NR.PreviewUI.frame:Hide()
         if event=="PLAYER_ENTERING_WORLD" then NR.engine:Stop();NR.Display:Clear() end
-        NR.Display:CacheFrames()
     elseif event == "ENCOUNTER_TIMELINE_EVENT_ADDED" then
         local info = ...
         if NR.Public(info) and type(info)=="table" then NR.engine:Timeline("added",{id=info.id,source=info.source,duration=info.duration},now) end
@@ -248,8 +259,7 @@ driver:SetScript("OnEvent", function(_, event, ...)
             end
         end
     elseif event == "ENCOUNTER_TIMELINE_EVENT_REMOVED" then NR.engine:Timeline("removed",{id=(...)},now)
-    else
-        NR.Display:CacheFrames()
-        if event == "PLAYER_REGEN_ENABLED" and NR.cleanupPending then NR.Cleanup("combat") end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        if NR.cleanupPending then NR.Cleanup("combat") end
     end
 end)

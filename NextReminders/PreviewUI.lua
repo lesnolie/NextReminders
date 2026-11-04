@@ -220,7 +220,6 @@ function UI:Select(index, play)
     for i, row in ipairs(self.entryButtons) do row:SetSelected(i == index) end
     self.title:SetText(item.name)
     self.detail:SetText(item.group .. " · " .. item.detail)
-    NR.Display:CacheFrames()
     NR.preview.autoUse = self.autoUse
     local ok, err = NR.preview:Start(item.plan, NR.db.settings, NR.GetIdentity(), GetTime(), { paused = not play, video = true, referenceEvents = self.referenceEvents })
     self.selectedPlan = item.plan

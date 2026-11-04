@@ -1,8 +1,15 @@
 local _, NR = ...
 _G.NextReminders = NR
-NR.version = "0.3.12-dev"
-NR.defaults = { lead = 5, window = 10, hideOnUse = true, tts = true,
-    countdown = true, sound = false, soundChoice = "meow", glow = "", volume = 80, scale = 1, autoBurst = true }
+NR.version = "0.3.13-dev"
+NR.defaults = { lead = 10, window = 5, hideOnUse = true,
+    countdown = true, sound = true, soundChoice = "noel_press", scale = 1, autoBurst = true }
+
+-- Voice countdown: "准备爆发" at 6.4s (the 1.2s clip ends before "5"), then 5, 4, 3, 2, 1.
+-- The lead is exactly what the player entered; below ~7s there is no room for "准备爆发".
+NR.COUNT_FROM, NR.PREPARE_AT = 5, 6.4
+function NR.ShowLead(settings)
+    return settings.lead
+end
 
 function NR.Public(value)
     return not (issecretvalue and issecretvalue(value))
@@ -50,16 +57,14 @@ end
 function NR.Settings(input)
     local result = NR.Copy(NR.defaults)
     input = type(input) == "table" and input or {}
-    for _, key in ipairs({"lead", "window", "volume", "scale"}) do
-        local bounds = key == "scale" and {0.5, 2} or key == "volume" and {0, 100} or {0, 60}
+    for _, key in ipairs({"lead", "window", "scale"}) do
+        local bounds = key == "scale" and {0.5, 2} or {0, 60}
         if NR.Number(input[key], bounds[1], bounds[2]) then result[key] = input[key] end
     end
-    for _, key in ipairs({"hideOnUse", "tts", "countdown", "sound", "autoBurst"}) do
+    for _, key in ipairs({"hideOnUse", "countdown", "sound", "autoBurst"}) do
         if type(input[key]) == "boolean" then result[key] = input[key] end
     end
-    if type(input.glow) == "string" and #input.glow <= 500 then result.glow = input.glow end
     if type(input.soundChoice) == "string" and #input.soundChoice <= 200 then result.soundChoice = input.soundChoice end
-    if NR.Number(input.voice, 0, 100000) then result.voice = input.voice end
     return result
 end
 

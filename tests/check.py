@@ -91,9 +91,12 @@ function CreateFrame(_,name,parent,template)
 end
 C_Spell={GetSpellInfo=function(id) return {name="Spell "..id,iconID=id} end,
  GetSpellCooldown=function() return {isEnabled=true,isActive=false,isOnGCD=false} end}
+-- Text-to-speech was removed; the mock stays so tests can assert it is never called.
 voiceCalls={}
 C_VoiceChat={GetTtsVoices=function() return {{voiceID=1}} end,
  SpeakText=function(_,text) voiceCalls[#voiceCalls+1]=text end}
+soundCalls={}
+PlaySoundFile=function(path) soundCalls[#soundCalls+1]=path; return true end
 Enum={EncounterTimelineEventState={Active=0,Paused=1,Finished=2,Canceled=3}}
 C_EncounterTimeline={GetEventState=function() return 3 end}
 '''
@@ -392,47 +395,50 @@ PlaySoundFile=function(path)files[#files+1]=path;return true end
 PlaySound=function(id)kits[#kits+1]=id end
 LibStub=function()return {List=function()return {'Other'} end,Fetch=function()return 'x.ogg' end} end
 local s=NR.Settings({sound=true,soundChoice=('x'):rep(201)})
-assert(s.soundChoice=='meow' and s.soundFile==nil)
-local d=NR.Settings({});assert(d.soundChoice=='meow' and d.readySound==nil and d.missSound==nil)
-assert(NR.Sounds.Find('kit:READY_CHECK','meow').key=='meow','old client-sound choices fall back to the default clip')
+assert(s.soundChoice=='noel_press' and s.soundFile==nil)
+local d=NR.Settings({});assert(d.soundChoice=='noel_press' and d.readySound==nil and d.missSound==nil)
+assert(NR.Sounds.Find('kit:READY_CHECK','rita_ready').key=='rita_ready','old client-sound choices fall back to the default clip')
 assert(NR.Sounds.Play('kit:READY_CHECK')==nil and NR.Sounds.Play('off')==nil and #files==0 and #kits==0,'unknown or off plays nothing')
--- Only "off" plus the ten bundled clips: no client sounds, no LibSharedMedia, no custom file.
-local list=NR.Sounds.List();assert(list[1].key=='off' and #list==11)
+-- Only "off" plus the seven bundled clips: no client sounds, no LibSharedMedia, no custom file.
+local list=NR.Sounds.List();assert(list[1].key=='off' and #list==8)
+for _,k in ipairs({'meow','lyl_fire_2','molly_fire_2','molly_miss_2'}) do assert(not NR.Sounds.Exists(k),k) end
 for i=2,#list do local e=list[i];assert(e.file and e.voice and e.length>0)
  local f=io.open('NextReminders/Media/'..e.file:match('([%w_]+%.ogg)$'),'rb');assert(f,e.file);f:close() end
 -- Reminder: one voice clip for reminders shown together; it replaces the spell-name TTS and the countdown while it plays.
-NR.db.settings=NR.Settings({sound=true,tts=true})
+NR.db.settings=NR.Settings({sound=true})
 now=100;local before=#voiceCalls
--- Shown early: spell names are spoken, then 3, 2, 1, and the clip plays when time is up (once for both rows).
+-- Shown early: nothing is spoken, then 3, 2, 1, and the clip plays when time is up (once for both rows).
 NR.Display:Emit('show',{id=1,spellID=42650,target=105},5);NR.Display:Emit('show',{id=2,spellID=1233448,target=105},5)
-assert(#files==0 and #voiceCalls==before+2,'clip waits for the moment')
+assert(#files==0 and #voiceCalls==before,'clip waits for the moment')
+before=#voiceCalls
 now=102;NR.Display:Emit('countdown',{id=1},3);now=103;NR.Display:Emit('countdown',{id=1},2);now=104;NR.Display:Emit('countdown',{id=1},1)
-assert(voiceCalls[#voiceCalls]=='1' and #files==0)
+assert(#voiceCalls==before and #files==3 and files[3]:find('count_1.ogg',1,true),'recorded numbers, not TTS')
+for i=#files,1,-1 do files[i]=nil end
 now=104.5;NR.Display:Emit('update',{id=1},0.5);assert(#files==0)
 now=105;NR.Display:Emit('update',{id=1},0);NR.Display:Emit('update',{id=2},0)
-assert(#files==1 and files[1]:find('burst_meow.ogg',1,true),'one clip at time-up')
+assert(#files==1 and files[1]:find('noel_press.ogg',1,true),'one clip at time-up')
 NR.Display:Emit('update',{id=1},-1);assert(#files==1,'played once per reminder')
 -- A countdown number while a clip still plays waits for it.
 now=105.5;before=#voiceCalls;NR.Display:Emit('countdown',{id=1},3);assert(#voiceCalls==before)
 -- Ready again uses the same reminder sound.
-NR.Display:Clear();now=110;NR.Display:Emit('show',{id=5,spellID=42650,target=110,postReady=true},0);assert(files[#files]:find('burst_meow.ogg',1,true))
+NR.Display:Clear();now=110;NR.Display:Emit('show',{id=5,spellID=42650,target=110,postReady=true},0);assert(files[#files]:find('noel_press.ogg',1,true))
 -- An unused reminder that expires plays nothing more.
 local e=NR.Engine.New(function(kind,row,value)NR.Display:Emit(kind,row,value)end)
 NR.Display:Clear();NR.db.settings=NR.Settings({sound=true});local n=#files
 now=0;e:Begin(3101,'mythic',nil,{lead=5,window=10},0,{specID=252},NR.EventPlans.New(252,3101))
 now=0;e:Tick(0);now=11;NR.Display.soundUntil=nil;e:Tick(11);assert(#files==n+1,'expiry is silent')
--- A clip the client refuses: TTS still speaks.
+-- A clip the client refuses: nothing plays and nothing is spoken.
 NR.Display:Clear();PlaySoundFile=function()return false end
-NR.db.settings=NR.Settings({sound=true,tts=true,soundChoice='rita_ready'})
-now=300;before=#voiceCalls;NR.Display:Emit('show',{id=4,spellID=42650,target=300},0);assert(#voiceCalls==before+1)
+NR.db.settings=NR.Settings({sound=true,soundChoice='rita_ready'})
+now=300;NR.Display:Emit('show',{id=4,spellID=42650,target=300},0);assert(#voiceCalls==0)
 PlaySoundFile=function(path)files[#files+1]=path;return true end
 -- The picker opens the addon's own light list: one row per clip, current one marked; a pick selects, previews and closes.
 local ui=NR.UI;ui:SetPage('settings');ui:Refresh()
 local pick=ui.soundPicks.soundChoice;assert(ui.soundValues.soundChoice=='rita_ready' and pick:GetText():find('丽塔',1,true))
 pick.scripts.OnClick(pick);local menu=NR.Theme.menuFrame
-assert(menu.shown and menu.height==11*28+12)
-local shown=0;for _,row in ipairs(menu.rows)do if row.shown then shown=shown+1 end end;assert(shown==11)
-assert(menu.rows[9].mark.shown and not menu.rows[2].mark.shown,'current clip is marked')
+assert(menu.shown and menu.height==8*28+12)
+local shown=0;for _,row in ipairs(menu.rows)do if row.shown then shown=shown+1 end end;assert(shown==8)
+assert(menu.rows[7].mark.shown and not menu.rows[2].mark.shown,'current clip is marked')
 menu.rows[3].scripts.OnClick(menu.rows[3])
 assert(not menu.shown and ui.soundValues.soundChoice=='lyl_fire_1' and files[#files]:find('lyl_fire_1.ogg',1,true) and pick:GetText():find('开炮',1,true))
 pick.scripts.OnClick(pick);assert(menu.shown);pick.scripts.OnClick(pick);assert(not menu.shown,'clicking the field again closes it')
@@ -449,7 +455,7 @@ C_Spell.GetSpellInfo=function()return nil end
 local name,icon=NR.SpellCatalog.Info(42650);assert(name=='亡者大军' and icon=='Interface\\Icons\\spell_deathknight_armyofthedead')
 local action,texture,id=NR.EventPlans.Action({spellID=42650});assert(action==name and texture==icon and id==42650)
 NR.Display:Emit('show',{id=42,spellID=42650,target=5},5)
-assert(NR.Display.rows[42].label:GetText()=='亡者大军' and voiceCalls[#voiceCalls]=='亡者大军')
+assert(NR.Display.rows[42].label:GetText()=='亡者大军' and #voiceCalls==0)
 C_Spell.GetSpellInfo=function()return {name={secret=true},iconID={secret=true}} end
 assert(NR.SpellCatalog.Info(42650)=='亡者大军')
 C_Spell.GetSpellInfo=function()error('API unavailable')end;assert(NR.SpellCatalog.Info(42650)=='亡者大军')
@@ -490,11 +496,83 @@ editor:SetFocus();ui.importPage:Hide();assert(not editor:HasFocus())
 assert(ui.encounter:GetText()=='','focus fix must not invent an encounter number')
 ''')
 
+    def test_voice_countdown_prepare_then_five_to_one_recorded_cues(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r'''
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local plan=NR.ParseNote("EncounterID:3492;Difficulty:Heroic;\nph:1;time:20;spellid:51271;")
+local events={}
+local p=NR.Preview.New(function(kind,row,value) events[#events+1]={kind=kind,value=value} end,function() end)
+assert(p:Start(plan,{lead=10,countdown=true},{},1000))
+assert(p:Seek(9.9,1000)); assert(not p.engine.rows[1].shown,'not before 10s')
+assert(p:Seek(12.9,1000)); assert(p.engine.rows[1].shown)
+local t=12.9
+while t<20.5 do t=t+0.05; p:Tick(1000+t-12.9) end
+local seq={}
+for _,e in ipairs(events) do if e.kind=='countdown' then seq[#seq+1]=tostring(e.value) end end
+assert(table.concat(seq,',')=='prepare,5,4,3,2,1',table.concat(seq,','))
+-- Countdown off keeps the old 5s lead and says nothing.
+events={}
+assert(p:Start(plan,{lead=5,countdown=true},{},1000)); assert(p:Seek(14.5,1000)); assert(not p.engine.rows[1].shown,'lead is exactly what was entered')
+assert(p:Seek(15.2,1000)); assert(p.engine.rows[1].shown)
+events={}; assert(p:Seek(19.9,1000)); for _,e in ipairs(events) do assert(e.value~='prepare','no room for 准备爆发 under 7s') end
+events={}
+assert(p:Start(plan,{lead=5,countdown=false},{},1000))
+assert(p:Seek(19.9,1000)); for _,e in ipairs(events) do assert(e.kind~='countdown') end
+p:Stop()
+-- Display: "准备爆发" replaces the spell-name TTS; numbers are recorded clips.
+files={};PlaySoundFile=function(path)files[#files+1]=path;return true end
+NR.db.settings=NR.Settings({countdown=true,sound=true})
+NR.Display:Clear(); now=200; local v=#voiceCalls
+NR.Display:Emit('show',{id=1,spellID=51271,target=207},7); assert(#voiceCalls==v,'nothing is spoken')
+now=200.6; NR.Display:Emit('countdown',{id=1},'prepare'); assert(files[#files]:find('prep_burst.ogg',1,true))
+now=200.6; NR.Display:Emit('countdown',{id=2},'prepare'); assert(not files[#files-1] or not files[#files-1]:find('prep_burst',1,true),'two rows share one prepare')
+for n=5,1,-1 do now=207-n; NR.Display:Emit('countdown',{id=1},n); assert(files[#files]:find('count_'..n..'.ogg',1,true)) end
+assert(#voiceCalls==v)
+now=207; NR.Display:Emit('update',{id=1},0); assert(files[#files]:find('noel_press.ogg',1,true))
+-- Shown late (no room to prepare): still nothing is spoken.
+NR.Display:Clear(); now=300; NR.Display:Emit('show',{id=3,spellID=51271,target=304},4); assert(#voiceCalls==v)
+''')
+
+    def test_sound_delete_restore_default_noel_and_test_position(self):
+        lua,nr=runtime(True);lua.globals().NR=nr
+        lua.execute(r'''
+NextRemindersDB={settings={soundChoice='meow',sound=false,lead=5,window=10,volume=65,tts=true,glow='player',voice=3}}
+created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
+local st=NR.db.settings;assert(st.lead==10 and st.window==5 and st.sound==true and NR.db.defaultsVersion==3,'old defaults move once')
+assert(st.volume==nil and st.tts==nil and st.glow==nil and st.voice==nil,'removed settings are dropped')
+assert(NR.db.settings.soundChoice=='noel_press' and NR.db.soundDefault==2,'old default moves to 诺艾尔 once')
+NR.db.settings.soundChoice='molly_fire_1'
+local files={};PlaySoundFile=function(path)files[#files+1]=path;return true end
+local ui=NR.UI;ui:SetPage('settings');ui:Refresh()
+local pick=ui.soundPicks.soundChoice;assert(ui.soundValues.soundChoice=='molly_fire_1')
+pick.scripts.OnClick(pick);local menu=NR.Theme.menuFrame
+assert(not menu.rows[1].remove.shown,'"off" cannot be deleted') ;assert(menu.rows[2].remove.shown)
+-- Delete the clip in use: the choice moves to 诺艾尔 and is saved.
+local meowRow;for _,row in ipairs(menu.rows)do if row.shown and row.item.key=='molly_fire_1' then meowRow=row end end
+meowRow.remove.scripts.OnClick(meowRow.remove)
+assert(NR.Sounds.IsHidden('molly_fire_1') and NR.db.hiddenSounds.molly_fire_1 and ui.soundValues.soundChoice=='noel_press' and NR.db.settings.soundChoice=='noel_press')
+assert(menu.shown and #NR.Sounds.List()==7)
+local last;for _,row in ipairs(menu.rows)do if row.shown then last=row end end
+assert(last.item.key=='__restore' and last.caption:GetText():find('（1）',1,true) and not last.remove.shown)
+assert(NR.Sounds.Play('molly_fire_1')==nil,'a deleted clip never plays')
+assert(NR.Sounds.Find('molly_fire_1','noel_press').key=='noel_press')
+last.scripts.OnClick(last);assert(not NR.Sounds.IsHidden('molly_fire_1') and #NR.Sounds.List()==8 and menu.shown)
+-- Deleting every clip leaves only "off".
+for _,e in ipairs(NR.Sounds.List())do NR.Sounds.Remove(e.key) end
+assert(#NR.Sounds.List()==1 and NR.Sounds.Find('noel_press','noel_press').key=='off')
+NR.Sounds.RestoreAll()
+-- /nr test (no player window) stays where real reminders appear.
+menu:Hide();ui.frame:Hide();NR.PreviewUI.frame:Hide()
+SlashCmdList.NEXTREMINDERS("test")
+assert(not NR.Display.previewMode and NR.Display.container.point[1]=='TOP' and NR.Display.container.point[5]==-144)
+''')
+
     def test_display_future_countdown_due_now_waiting_and_translucent_background(self):
         lua,nr=runtime(True);lua.globals().NR=nr
         lua.execute(r'''
 created[1].scripts.OnEvent(created[1],'ADDON_LOADED','NextReminders')
-NR.db.settings.tts=false;NR.db.settings.countdown=false
+NR.db.settings.countdown=false;NR.db.settings.lead=5
 local plan=assert(NR.ParseNote('EncounterID:3492;Difficulty:Heroic;\nph:1;time:10;spellid:51271;'))
 assert(NR.PreviewUI:Open(plan));assert(not NR.Display.rows[1])
 NR.preview:Tick(5)
@@ -731,6 +809,8 @@ info.isActive=false;e:Tick(80);assert(output==2)
         lua.execute(r'''
 function GetSpecializationInfo() return 252 end
 local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+readyCalls={};local emit=NR.Display.Emit
+NR.Display.Emit=function(self,kind,row,value) if kind=='show' and row and row.postReady then readyCalls[#readyCalls+1]=row.id end return emit(self,kind,row,value) end
 local cd={}
 C_Spell.GetSpellCooldown=function(id)
  return setmetatable({isEnabled=true,isActive=cd[id]=='cooling',isOnGCD=false},{__index=function(_,key)error('numeric cooldown field read: '..key)end})
@@ -742,16 +822,16 @@ assert(not next(NR.engine.readyWatches),'opener must not unlock post-vulnerabili
 now=30;driver.scripts.OnEvent(driver,'ENCOUNTER_WARNING',{severity=1})
 now=32;driver.scripts.OnEvent(driver,'UNIT_SPELLCAST_SUCCEEDED','player','',42650)
 assert(NR.engine.readyWatches['event:2'])
-local before=#voiceCalls
-NR.engine:Tick(32.2);assert(#voiceCalls==before,'ready immediately after cast is not a completed cooldown edge')
-cd[42650]='cooling';now=33;driver.scripts.OnEvent(driver,'SPELL_UPDATE_COOLDOWN',{secret=true});NR.engine:Tick(33);assert(#voiceCalls==before)
+local before=#readyCalls
+NR.engine:Tick(32.2);assert(#readyCalls==before,'ready immediately after cast is not a completed cooldown edge')
+cd[42650]='cooling';now=33;driver.scripts.OnEvent(driver,'SPELL_UPDATE_COOLDOWN',{secret=true});NR.engine:Tick(33);assert(#readyCalls==before)
 cd[42650]='ready';NR.engine:Tick(80)
-assert(#voiceCalls==before+1 and voiceCalls[#voiceCalls]=='Spell 42650好了')
-NR.engine:Tick(81);NR.engine:Tick(92);assert(#voiceCalls==before+1,'one voice per edge')
+assert(#readyCalls==before+1 and #voiceCalls==0,'one ready-again reminder, nothing spoken')
+NR.engine:Tick(81);NR.engine:Tick(92);assert(#readyCalls==before+1,'one voice per edge')
 cd[42650]='cooling';NR.engine:CooldownUpdate(93);NR.engine:Tick(93);cd[42650]='ready';NR.engine:Tick(140)
-assert(#voiceCalls==before+2,'voice repeats after the next real cooldown')
+assert(#readyCalls==before+2,'voice repeats after the next real cooldown')
 driver.scripts.OnEvent(driver,'ENCOUNTER_END');cd[42650]='cooling';NR.engine:Tick(150);cd[42650]='ready';NR.engine:Tick(200)
-assert(#voiceCalls==before+2 and not next(NR.engine.readyWatches))
+assert(#readyCalls==before+2 and not next(NR.engine.readyWatches))
 now=220;driver.scripts.OnEvent(driver,'ENCOUNTER_START',3101,'',8)
 now=250;driver.scripts.OnEvent(driver,'ENCOUNTER_WARNING',{severity=1})
 now=252;driver.scripts.OnEvent(driver,'UNIT_SPELLCAST_SUCCEEDED','player','',42650)
@@ -763,8 +843,8 @@ now=330;driver.scripts.OnEvent(driver,'ENCOUNTER_WARNING',{severity=1})
 NR.engine:Tick(360);assert(NR.engine.rows[2].done and not NR.engine.rows[2].used,'vulnerability reminder expired unused')
 now=400;driver.scripts.OnEvent(driver,'UNIT_SPELLCAST_SUCCEEDED','player','',42650)
 assert(NR.engine.readyWatches['event:2'],'late first use unlocks ready reminders')
-cd[42650]='cooling';NR.engine:CooldownUpdate(401);NR.engine:Tick(401);before=#voiceCalls;cd[42650]='ready';NR.engine:Tick(500)
-assert(#voiceCalls==before+1,'late first use still voices the next ready')
+cd[42650]='cooling';NR.engine:CooldownUpdate(401);NR.engine:Tick(401);before=#readyCalls;cd[42650]='ready';NR.engine:Tick(500)
+assert(#readyCalls==before+1,'late first use still voices the next ready')
 ''')
 
     def test_ready_public_flags_secrets_gcd_charges_and_disabled_cases(self):
@@ -983,10 +1063,11 @@ local plan=ui.preview
 ui.settingsTab.scripts.OnClick()
 assert(ui.page=="settings" and ui.settingsPage:IsShown() and not ui.importPage:IsShown())
 assert(ui.settingsTab.themeSelected and not ui.importTab.themeSelected)
-ui.lead:SetText("7"); ui.window:SetText("8"); ui.volume:SetText("65"); ui.glow:SetText("player")
-for _,key in ipairs({"hideOnUse","tts","countdown","sound"}) do ui.checks[key]:SetChecked(true) end
+assert(ui.volume==nil and ui.glow==nil and ui.checks.tts==nil,'no volume, glow or spell-voice controls')
+ui.lead:SetText("7"); ui.window:SetText("8")
+for _,key in ipairs({"hideOnUse","countdown","sound"}) do ui.checks[key]:SetChecked(true) end
 ui.saveSettings.scripts.OnClick()
-assert(NR.db.settings.lead==7 and NR.db.settings.volume==65 and NR.db.settings.glow=="player")
+assert(NR.db.settings.lead==7 and NR.db.settings.window==8)
 combat=true; ui.lead:SetText("9"); ui.saveSettings.scripts.OnClick(); assert(NR.db.settings.lead==7)
 combat=false; ui.importTab.scripts.OnClick()
 assert(ui.note:GetText()==text and ui.preview==plan and ui.importPage:IsShown() and not ui.settingsPage:IsShown())
@@ -1022,7 +1103,7 @@ for _, event in ipairs(events) do if event.kind=="countdown" and event.value==3 
 assert(found)
 assert(p:SetSpeed(2,1502)); p:Tick(1503); assert(p.position==134.5)
 p:Cast(51271,1503); assert(p.engine.rows[1].done and not p.engine.rows[2].done)
-assert(p:Seek(129,1503)); assert(not p.engine.rows[1].shown and not p.engine.rows[1].done and #p.actions==0)
+assert(p:Seek(125,1503)); assert(not p.engine.rows[1].shown and not p.engine.rows[1].done and #p.actions==0)
 assert(not p:Seek(-1,1503)); assert(not p:SetSpeed(99,1503))
 assert(plan.rows[1].time==135.5 and not plan.rows[1].shown and not plan.enabled)
 p:Stop(); assert(not p.running and not p.engine.active and clears>0)
@@ -1064,7 +1145,7 @@ NR.PreviewUI.rows[1].use.scripts.OnClick(); assert(NR.preview.engine.rows[1].don
 assert(NR.NotePlans(251).plans["3492:heroic"]==saved and saved.rows[1].time==135.5 and not saved.rows[1].done)
 now=1000; driver.scripts.OnEvent(driver,"ENCOUNTER_START",3492,"Ulatek",15)
 assert(not NR.preview.running and not NR.PreviewUI.frame:IsShown() and NR.engine.active)
-assert(not NR.Display.previewMode and NR.Display.container.point[1]=="CENTER")
+assert(not NR.Display.previewMode and NR.Display.container.point[1]=="TOP" and NR.Display.container.point[5]==-144,"live rows: 16% down from the top")
 assert(NR.engine.rows[1].target==1135.5 and not NR.engine.rows[1].done)
 now=1130.5; driver.scripts.OnUpdate(driver,0.1)
 assert(NR.engine.rows[1].shown and not NR.Display.rows[1].label:GetText():find("预览",1,true))
@@ -1201,15 +1282,16 @@ driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
 now=100; SlashCmdList.NEXTREMINDERS("test")
 assert(NR.preview.running and #NR.preview.engine.rows==1 and NR.preview.engine.rows[1].shown)
 assert(not NR.engine.active and #NR.engine.trace==0, "demo must not alter the live engine")
-assert(NR.Display.rows[1]:IsShown() and #voiceCalls>0)
+assert(NR.Display.rows[1]:IsShown() and #voiceCalls==0,'nothing is spoken when a reminder shows')
 assert(next(NR.NotePlans(251).plans)==nil, "demo must not create a saved boss plan")
-now=102.1; driver.scripts.OnUpdate(driver,0.1); assert(voiceCalls[#voiceCalls]=="3")
+now=103.7; driver.scripts.OnUpdate(driver,0.1); assert(NR.preview.engine.rows[1].lastCountdown=="prepare")
+now=107.1; driver.scripts.OnUpdate(driver,0.1); assert(NR.preview.engine.rows[1].lastCountdown==3)
 driver.scripts.OnEvent(driver,"UNIT_SPELLCAST_SUCCEEDED","player","cast",{secret=true})
 assert(not NR.preview.engine.rows[1].done)
 driver.scripts.OnEvent(driver,"UNIT_SPELLCAST_SUCCEEDED","player","cast",51271)
 assert(NR.preview.engine.rows[1].done and not NR.Display.rows[1]:IsShown())
 SlashCmdList.NEXTREMINDERS("stop"); assert(not NR.preview.running and not NR.engine.active)
-SlashCmdList.NEXTREMINDERS("test"); now=119; driver.scripts.OnUpdate(driver,0.1)
+SlashCmdList.NEXTREMINDERS("test"); now=128; driver.scripts.OnUpdate(driver,0.1)
 assert(not NR.preview.running and not NR.Display.rows[1]:IsShown())
 combat=true; SlashCmdList.NEXTREMINDERS("test"); assert(not NR.preview.running and not NR.engine.active)
 ''')
@@ -1229,29 +1311,6 @@ local count=#created; NR.UI:Parse()
 assert(#created==count and NR.UI.binders[1]==a and NR.UI.binders[2]==b)
 assert(not NR.UI.preview.phaseBindings[2] and not NR.UI.preview.phaseBindings[3])
 NR.UI.personal:SetChecked(false); NR.UI:Refresh(); assert(not NR.UI.personal:GetChecked())
-''')
-
-    def test_native_glow_aliases_visibility_and_reference_counts(self):
-        lua,nr=runtime(True); lua.globals().NR=nr
-        lua.execute(r'''
-created[1].scripts.OnEvent(created[1],"ADDON_LOADED","NextReminders")
-PlayerFrame=object(); PlayerFrame:Show()
-CompactRaidGroup1Member1=object(); CompactRaidGroup1Member1.unit="raid1"; CompactRaidGroup1Member1:Show()
-NR.db.settings.glow="Leslie-Realm"
-NR.Display:CacheFrames(); assert(#NR.Display.frameCache["leslie-realm"]==2)
-NR.Display:SetGlow(1,true); NR.Display:SetGlow(2,true)
-local playerGlow=NR.Display.glows[PlayerFrame].overlay
-assert(playerGlow.alpha==1)
-NR.Display:SetGlow(1,false); assert(playerGlow.alpha==1)
-PlayerFrame:Hide(); NR.Display:RefreshGlows(); assert(playerGlow.alpha==0)
-PlayerFrame:Show(); NR.Display:RefreshGlows(); assert(playerGlow.alpha==1)
-NR.db.settings.glow="Other"; NR.Display:SetGlow(2,false); assert(playerGlow.alpha==0)
-UnitName=function() return "北霜","Realm" end
-NR.db.settings.glow="北霜-Realm，Other"; NR.Display:CacheFrames()
-NR.Display:SetGlow(3,true); assert(playerGlow.alpha==1, "UTF-8 names must remain intact")
-NR.Display:SetGlow(3,false); assert(playerGlow.alpha==0)
-combat=true; local count=#created; NR.Display:CacheFrames(); assert(#created==count)
-NR.Display:Clear(); assert(NR.Display.glows[CompactRaidGroup1Member1].overlay.alpha==0)
 ''')
 
     def test_team_tags_match_lorrgs_spec_exports(self):
@@ -1329,7 +1388,7 @@ local events={}
 local e=NR.Engine.New(function(kind,row) events[#events+1]={kind=kind,id=type(row)=="table" and row.id} end)
 local p=NR.ParseNote("EncounterID:3492;Difficulty:Heroic;\nph:1;time:10;spellid:51271;\nph:1;time:70;spellid:51271;")
 p.enabled=true
-e:Begin(3492,"heroic",p,{lead=5,window=10},0,{})
+e:Begin(3492,"heroic",p,{lead=5,window=10,countdown=false},0,{})
 e:Cast(51271,1); assert(not e.rows[1].done and not e.rows[2].done)
 e:Tick(5); assert(e.rows[1].shown)
 e:Cast(51271,6); assert(e.rows[1].done and not e.rows[2].done)
@@ -1507,13 +1566,12 @@ collectgarbage=function() error("must not force garbage collection") end
 UpdateAddOnMemoryUsage=function() error("must not scan addon memory") end
 StopSound=function(h) stopped[#stopped+1]=h end
 PlaySoundFile=function() return true,77 end
-C_VoiceChat.StopSpeakingText=function() stopped[#stopped+1]="tts" end
 local driver=created[1];driver.scripts.OnEvent(driver,"ADDON_LOADED","NextReminders")
 NR.db.settings=NR.Settings({sound=true})
 now=10;NR.Display:Emit("show",{id=1,spellID=42650,target=10},0)
 -- Closing the window stops the clip that is still playing without forcing garbage collection.
 NR.UI.frame:Show();NR.UI.frame:Hide()
-assert(stopped[1]==77 and stopped[2]=="tts" and NR.lastCleanup=="close")
+assert(stopped[1]==77 and #stopped==1 and NR.lastCleanup=="close")
 assert(not NR.Display.rows[1]:IsShown())
 -- In combat it waits, then runs once combat ends.
 combat=true;local ok,err=NR.Cleanup("close");assert(not ok and err:find("脱战"))
@@ -1857,6 +1915,8 @@ assert(p and #p.rows==1 and p.rows[1].spellID==51271,'unlearned talents omitted;
         lua,nr=runtime(True); lua.globals().NR=nr
         lua.execute(r"""
 local driver=created[1];driver.scripts.OnEvent(driver,'ADDON_LOADED','NextReminders')
+readyCalls={};local emit=NR.Display.Emit
+NR.Display.Emit=function(self,kind,row,value) if kind=='show' and row and row.postReady then readyCalls[#readyCalls+1]=row.id end return emit(self,kind,row,value) end
 assert(NR.db.settings.autoBurst==nil or NR.Settings(NR.db.settings).autoBurst)
 local cd={}
 C_Spell.GetSpellCooldown=function(id) return {isEnabled=true,isActive=cd[id]=='cooling',isOnGCD=false} end
@@ -1873,9 +1933,9 @@ now=20;NR.engine:Tick(20);assert(NR.engine.rows[1].done,'pull reminder expires u
 now=40;driver.scripts.OnEvent(driver,'UNIT_SPELLCAST_SUCCEEDED','player','',spell)
 assert(NR.engine.readyWatches[NR.engine.rows[1].id],'late first use still starts ready reminders')
 cd[spell]='cooling';driver.scripts.OnEvent(driver,'SPELL_UPDATE_COOLDOWN');now=41;NR.engine:Tick(41)
-local before=#voiceCalls
+local before=#readyCalls
 cd[spell]='ready';now=100;NR.engine:Tick(100)
-assert(NR.engine.rows[1].shown and #voiceCalls==before+1,'reminded when ready again')
+assert(NR.engine.rows[1].shown and #readyCalls==before+1,'reminded when ready again')
 driver.scripts.OnEvent(driver,'ENCOUNTER_END')
 -- Raid difficulty, disabled setting, or a configured plan do not use the fallback.
 driver.scripts.OnEvent(driver,'ENCOUNTER_START',9999,'',16); assert(#NR.engine.rows==0)

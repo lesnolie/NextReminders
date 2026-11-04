@@ -185,16 +185,22 @@ function NR.Engine.New(emit, previewDefinition, readyReader)
                 elseif (row.eventRow and now>=row.target+row.window) or (not row.eventRow and now>row.target+self.settings.window) then
                     row.done = true
                     if row.shown then row.shown = false; self.emit("hide", row) end
-                elseif now >= row.target - self.settings.lead then
+                elseif now >= row.target - NR.ShowLead(self.settings) then
                     if not row.shown then
                         row.shown = true
                         self.emit("show", row, row.target - now)
                         self:Log("reminder", row.spellID or row.actionName, now)
                     end
                     local remaining = row.target - now
-                    if remaining > 0 and remaining <= 3 and self.settings.countdown then
-                        local second = math.ceil(remaining)
-                        if row.lastCountdown ~= second then row.lastCountdown = second; self.emit("countdown", row, second) end
+                    if remaining > 0 and self.settings.countdown then
+                        -- "准备爆发" only fits before 5 and only for a spell that is ready.
+                        if not row.lastCountdown and remaining <= NR.PREPARE_AT and remaining > NR.COUNT_FROM + 0.2
+                            and (not spellID or state == "ready") then
+                            row.lastCountdown = "prepare"; self.emit("countdown", row, "prepare")
+                        elseif remaining <= NR.COUNT_FROM then
+                            local second = math.ceil(remaining)
+                            if row.lastCountdown ~= second then row.lastCountdown = second; self.emit("countdown", row, second) end
+                        end
                     end
                     self.emit("update", row, remaining)
                 end

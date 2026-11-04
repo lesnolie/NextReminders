@@ -75,7 +75,7 @@ PreviewUI 显示完整列表并复用控件，模拟施法仅消费当前提醒�
 
 0.1.3 Theme 自建扁平 Button/Check/Edit/Panel/Label/Window/Scroll，保留标准按钮文字和启用接口。窗口按屏幕宽和高缩放，只有标题栏可拖动。UI 分导入/设置页，切页保留草稿；阶段绑定有独立滚动区，不限于前 7 个来源阶段。PreviewUI 用分列列表和同一虚拟时间的只读轨道显示；轨道不写入个人方案。主题变化不修改秘密值、调度、SavedVariables 或阶段识别合同。
 
-Display 的提醒条和发光覆盖层归插件所有。原生团框在脱战且非光环限制环境下缓存，名字/单位值均检查是否公开。覆盖层仅在目标框可见且仍有活动提醒引用时显示；不改原生团框属性。
+Display 只管理插件自有的提醒条与录音播放。0.3.13 起移除了团框发光（CacheFrames/SetGlow/覆盖层、GROUP_ROSTER_UPDATE）和文字转语音（C_VoiceChat、tts/volume/voice 设置）；旧存档里的 tts/glow/volume/voice 键由 NR.Settings 丢弃。
 
 UI 的导入、保存、设置、暂停和回滚在战斗中拒绝；文本/个人模式/使用难度变化，以及 MRT 首领变化后要求重新预览。阶段按钮复用，并捕获各自来源阶段。首领固定时间仅作为预览参考，不生成玩家施法方案。
 
@@ -96,3 +96,13 @@ Main 注册玩家成功施法及公开时间轴事件。战斗开始/进入世�
 
 
 大秘境时间轴（2026-10-24）：`mplus-timeline.mjs` 沿用团本页的共享刻度、技能轨道、拖动节点设计；事件相对行按事件和次数独立分轨，不伪造开战时间。同刻技能点分层排布。鼠标/触屏拖动、键盘微调仅更新选中行的 time，放开时提交一次历史；取消拖动不写入。planner 复用团本 History，记录当前副本编辑快照，切换专精/副本重置历史；任何编辑、撤销、重做使旧导出失效。首领切换保留该副本的编辑历史。
+
+0.3.13-dev 语音倒数：参照 RurutiaSA_Combat 盾反模块（到点逐个播短录音，而非一整条）。Core 定义 COUNT_FROM=5、PREPARE_AT=6.4、COUNT_SHOW=10，NR.ShowLead(settings) 现直接返回玩家填写的 lead（默认改为 10；不再暗中加长），lead<6.4 时没有“准备”。Engine 在 6.4～5.2 秒、技能就绪时发 countdown="prepare" 一次，之后 5～1 每秒一次，复用 row.lastCountdown 去重和重置。Display 播 Sounds.PlayCue（prep_burst / count_N），文件被拒才回退 TTS 念数字；有“准备”时跳过技能名 TTS。到点语音包新增诺艾尔「快按爆发」(noel_press)。录音源 MP3 放 .local/voice-src，不随插件发布。
+
+0.3.13-dev 位置与语音包：Display:Anchor() 默认把容器 TOP 锚在 UIParent 高度 16%（按容器缩放换算），NR.db.position 存在时仍用 CENTER 偏移；previewMode 移到顶部只在 PreviewUI.frame 显示时发生，/nr test 与实战同位。默认 soundChoice=noel_press，Main 用 db.soundDefault=2 做一次性 meow→noel 迁移。Sounds 新增 hiddenSounds（db 级，即时保存）：List/Find/Play 均排除已删除条目，"off" 不可删；Theme.Menu 增加可选 onRemove 与行内删除钮，UI 菜单在有删除时追加恢复行。
+
+0.3.13-dev 默认值：lead 10、window 5、sound 开；Main 用 db.defaultsVersion=3 把仍停在旧默认（lead 5 / window 10 / sound 关）的值迁移一次。
+
+0.3.13-dev 语音包精简：移除 burst_meow、lyl_fire_2、molly_fire_2、molly_miss_2（文件一并删除），保留 noel_press、lyl_fire_1、molly_fire_1、molly_miss_1、promo_fire_1/2、rita_ready。Main 加载时若 soundChoice 不在包内（Sounds.Exists）改为 noel_press。build.py 的语音包存在检查改查 noel_press.ogg。
+
+0.3.13-dev 设置页：两张数值卡（提前显示、时点后保留）各 558 宽；开关为用过撤提醒、提示音效、语音倒数、未配置大秘境首领；大秘境默认爆发卡占整行。技能转好（postReady）提醒不再念“X好了”，出现即播放选中语音。
